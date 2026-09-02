@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ENSAPIA Slack 비즈니스 메시지 AI 번역 워크벤치의 세 가지 디자인 시안 비교 페이지"
+    />
+    <title>ENSAPIA 번역 워크벤치 — 디자인 시안</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="preview-toolbar">
+      <div class="preview-title">
+        <span class="eyebrow">DESIGN PREVIEW</span>
+        <h1>ENSAPIA Translation Workbench</h1>
+        <p>세 가지 시안을 전환하며 번역·용어집·인명·설정 화면을 확인하세요.</p>
+      </div>
+
+      <div class="preview-controls" aria-label="시안 미리보기 설정">
+        <div class="control-group">
+          <span class="control-label">디자인</span>
+          <div class="segmented" role="group" aria-label="디자인 선택">
+            <button class="segment active" data-theme-choice="focus" type="button">A · Focus White</button>
+            <button class="segment" data-theme-choice="frame" type="button">B · Blue Frame</button>
+            <button class="segment" data-theme-choice="airy" type="button">C · Airy Canvas</button>
+          </div>
+        </div>
+
+        <div class="control-group device-control">
+          <span class="control-label">화면</span>
+          <div class="segmented" role="group" aria-label="화면 크기 선택">
+            <button class="segment active" data-device-choice="desktop" type="button">PC</button>
+            <button class="segment" data-device-choice="mobile" type="button">모바일</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <aside class="concept-note" aria-live="polite">
+      <strong id="concept-name">A · Focus White</strong>
+      <span id="concept-description">업무 집중형 — 원문과 최종본을 빠르게 비교하는 미니멀한 흰색 워크벤치</span>
+    </aside>
+
+    <main class="preview-stage" data-device="desktop">
+      <div class="browser-frame">
+        <div class="browser-bar" aria-hidden="true">
+          <span class="browser-dot red"></span>
+          <span class="browser-dot yellow"></span>
+          <span class="browser-dot green"></span>
+          <div class="browser-address">ensapia.internal/translate</div>
+        </div>
+
+        <div class="app-shell" data-theme="focus">
+          <aside class="app-nav">
+            <div class="brand-block">
+              <img src="./assets/ensapia-logo.png" alt="ENSAPIA" />
+              <span>AI Translation Workbench</span>
+            </div>
+
+            <nav class="primary-nav" aria-label="주요 메뉴">
+              <button class="nav-item active" type="button" data-screen="translate">
+                <span class="nav-icon">T</span><span>번역</span>
+              </button>
+              <button class="nav-item" type="button" data-screen="glossary">
+                <span class="nav-icon">G</span><span>용어집</span>
+              </button>
+              <button class="nav-item" type="button" data-screen="people">
+                <span class="nav-icon">P</span><span>인명·직책</span>
+              </button>
+              <button class="nav-item" type="button" data-screen="settings">
+                <span class="nav-icon">S</span><span>운영 설정</span>
+              </button>
+            </nav>
+
+            <div class="nav-foot">
+              <span class="status-dot"></span>
+              <span>OpenAI · Gemini 연결됨</span>
+            </div>
+          </aside>
+
+          <section class="app-main">
+            <header class="app-topbar">
+              <div>
+                <span class="workspace-label">ENSAPIA SEOUL</span>
+                <h2 id="screen-title">비즈니스 메시지 번역</h2>
+              </div>
+              <div class="topbar-meta">
+                <span class="api-status"><span></span> API 정상</span>
+                <button class="avatar-button" type="button" aria-label="사용자 메뉴">LS</button>
+              </div>
+            </header>
+
+            <div class="screen-content active" data-screen-panel="translate">
+              <div class="page-intro">
+                <div>
+                  <p class="section-kicker">TRANSLATE</p>
+                  <h3>Slack 메시지를 입력하세요</h3>
+                  <p>한국어와 일본어를 자동으로 감지하고 ENSAPIA 표현 기준을 적용합니다.</p>
+                </div>
+                <span class="privacy-badge">번역 데이터 암호화 저장</span>
+              </div>
+
+              <div class="translation-grid">
+                <article class="translation-card source-card">
+                  <div class="card-header">
+                    <div>
+                      <span class="card-label">원문</span>
+                      <span class="language-chip">한국어 자동 감지</span>
+                    </div>
+                    <span class="character-count"><span id="char-count">88</span>자</span>
+                  </div>
+                  <textarea id="source-text" aria-label="번역할 원문">사토상, 안녕하세요. Ontos(IAM) 권한 설정 관련해서 확인 부탁드립니다. 가능하시다면 오늘 오후 3시까지 검토해 주시면 감사하겠습니다.</textarea>
+                  <div class="source-hint">
+                    <span>인명 1개</span>
+                    <span>사내 용어 1개</span>
+                    <span>요청 메시지</span>
+                  </div>
+                </article>
+
+                <div class="translate-action-wrap">
+                  <button id="translate-button" class="primary-action" type="button">
+                    <span class="action-label">번역하기</span>
+                    <span class="action-arrow">→</span>
+                  </button>
+                  <span class="auto-copy">KO → JA</span>
+                </div>
+
+                <article class="translation-card result-card">
+                  <div class="card-header">
+                    <div>
+                      <span class="card-label">최종 번역본</span>
+                      <span class="language-chip result">일본어</span>
+                    </div>
+                    <button id="copy-button" class="copy-button" type="button">복사</button>
+                  </div>
+                  <div id="result-text" class="result-text" lang="ja">
+                    佐藤さん、こんにちは。Ontos（IAM）の権限設定について、ご確認をお願いいたします。可能でしたら、本日15時までにご確認いただけますと幸いです。
+                  </div>
+                  <div class="result-footer">
+                    <span><span class="quality-dot"></span> ENSAPIA 기준 적용 완료</span>
+                    <span>방금 전</span>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div class="screen-content" data-screen-panel="glossary">
+              <div class="page-intro management-intro">
+                <div>
+                  <p class="section-kicker">GLOSSARY</p>
+                  <h3>ENSAPIA 용어집</h3>
+                  <p>서비스명과 고유 용어의 한국어·일본어 표기를 관리합니다.</p>
+                </div>
+                <button class="primary-small" type="button" data-open-dialog="glossary-dialog">+ 새 용어</button>
+              </div>
+
+              <div class="filter-row">
+                <label class="search-field">
+                  <span>검색</span>
+                  <input id="glossary-search" type="search" placeholder="용어나 설명을 검색하세요" />
+                </label>
+                <button class="filter-button" type="button">전체 · 12</button>
+                <button class="filter-button" type="button">활성만</button>
+              </div>
+
+              <div class="data-table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>원어</th><th>권장 표기</th><th>설명</th><th>상태</th><th></th></tr></thead>
+                  <tbody id="glossary-rows">
+                    <tr><td><strong>Ontos (IAM)</strong></td><td>Ontos（IAM）</td><td>통합 계정·권한 관리 서비스</td><td><span class="table-status">활성</span></td><td><button class="more-button" type="button">•••</button></td></tr>
+                    <tr><td><strong>ENSAPIA Seoul</strong></td><td>ENSAPIA Seoul</td><td>서울 법인 공식 표기</td><td><span class="table-status">활성</span></td><td><button class="more-button" type="button">•••</button></td></tr>
+                    <tr><td><strong>운영계</strong></td><td>本番環境</td><td>실제 서비스 운영 환경</td><td><span class="table-status">활성</span></td><td><button class="more-button" type="button">•••</button></td></tr>
+                    <tr><td><strong>검증계</strong></td><td>検証環境</td><td>배포 전 검증 환경</td><td><span class="table-status muted">검토</span></td><td><button class="more-button" type="button">•••</button></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="screen-content" data-screen-panel="people">
+              <div class="page-intro management-intro">
+                <div>
+                  <p class="section-kicker">PEOPLE</p>
+                  <h3>인명·직책 기준</h3>
+                  <p>메시지 속 이름을 인식해 언어별 표기와 호칭을 일관되게 적용합니다.</p>
+                </div>
+                <button class="primary-small" type="button" data-open-dialog="member-dialog">+ 새 멤버</button>
+              </div>
+
+              <div class="people-grid">
+                <article class="person-card">
+                  <div class="person-avatar">佐</div>
+                  <div><strong>佐藤さん</strong><span>한국어 인식 표현 3개</span></div>
+                  <dl><div><dt>인식 표현</dt><dd>사토 대표님 · 사토상 · 사토님</dd></div><div><dt>통합 표기</dt><dd>佐藤さん</dd></div></dl>
+                  <span class="sample-tag">샘플 데이터</span>
+                </article>
+                <article class="person-card">
+                  <div class="person-avatar alt">宮</div>
+                  <div><strong>宮本さん</strong><span>한국어 인식 표현 3개</span></div>
+                  <dl><div><dt>인식 표현</dt><dd>미야모토 대표님 · 미야모토상 · 미야모토님</dd></div><div><dt>통합 표기</dt><dd>宮本さん</dd></div></dl>
+                  <span class="sample-tag">샘플 데이터</span>
+                </article>
+                <button class="person-card add-card" type="button" data-open-dialog="member-dialog">
+                  <span class="add-symbol">+</span><strong>멤버 추가</strong><span>언어별 표기와 호칭 등록</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="screen-content" data-screen-panel="settings">
+              <div class="page-intro">
+                <div>
+                  <p class="section-kicker">SETTINGS</p>
+                  <h3>운영 설정</h3>
+                  <p>모델 연결 상태, 비용과 데이터 보관 정책을 확인합니다.</p>
+                </div>
+              </div>
+
+              <div class="settings-grid">
+                <article class="setting-card">
+                  <div class="setting-heading"><span class="setting-icon">AI</span><div><strong>균형형 모델 운영</strong><span>연결 상태 정상</span></div></div>
+                  <div class="model-row"><span>1차 번역·교차검증</span><strong>표준 모델</strong></div>
+                  <div class="model-row"><span>최종 종합</span><strong>고성능 모델</strong></div>
+                  <button class="secondary-button demo-button" type="button" data-message="모델 설정 화면을 표시합니다.">모델 설정</button>
+                </article>
+
+                <article class="setting-card">
+                  <div class="setting-heading"><span class="setting-icon budget">₩</span><div><strong>이번 달 예상 비용</strong><span>사용량 기준</span></div></div>
+                  <div class="cost-number">₩8,420 <small>/ ₩30,000</small></div>
+                  <div class="progress-track"><span style="width: 28%"></span></div>
+                  <div class="cost-meta"><span>번역 126건</span><span>상한의 28%</span></div>
+                </article>
+
+                <article class="setting-card wide">
+                  <div class="setting-heading"><span class="setting-icon data">DB</span><div><strong>번역 데이터 저장</strong><span>향후 학습용 원천 데이터</span></div></div>
+                  <div class="policy-row"><span>원문·모델별 번역·교차검증·최종본</span><span class="policy-chip">암호화 저장</span></div>
+                  <div class="policy-row"><span>우수 사례 별도 분류</span><span class="policy-chip off">사용 안 함</span></div>
+                  <div class="policy-row"><span>접근 권한</span><span class="policy-chip">나만</span></div>
+                </article>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <dialog id="glossary-dialog" class="entry-dialog" aria-labelledby="glossary-dialog-title">
+      <form id="glossary-form" class="entry-form" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <span class="dialog-kicker">GLOSSARY</span>
+            <h2 id="glossary-dialog-title">새 용어 등록</h2>
+            <p>번역할 때 항상 같은 표현을 사용하도록 기준을 등록합니다.</p>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog aria-label="닫기">×</button>
+        </div>
+
+        <div class="dialog-section">
+          <div class="section-number">01</div>
+          <div class="section-body">
+            <div class="form-section-heading">
+              <strong>기본 표기</strong>
+              <span>원문과 번역문에 적용할 용어를 입력해 주세요.</span>
+            </div>
+            <div class="form-grid two-column">
+              <label class="form-field">
+                <span>원어 <em>필수</em></span>
+                <input id="term-source" name="sourceTerm" type="text" placeholder="예: 운영계" required />
+              </label>
+              <label class="form-field">
+                <span>권장 표기 <em>필수</em></span>
+                <input id="term-target" name="targetTerm" type="text" placeholder="예: 本番環境" required />
+              </label>
+              <label class="form-field">
+                <span>원어 언어</span>
+                <select name="sourceLanguage">
+                  <option value="ko">한국어</option>
+                  <option value="ja">일본어</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span>적용 방향</span>
+                <select name="direction">
+                  <option value="ko-ja">한국어 → 일본어</option>
+                  <option value="ja-ko">일본어 → 한국어</option>
+                  <option value="both">양방향</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-section">
+          <div class="section-number">02</div>
+          <div class="section-body">
+            <div class="form-section-heading">
+              <strong>사용 기준</strong>
+              <span>모델이 이 용어를 구분할 수 있도록 맥락을 더해 주세요.</span>
+            </div>
+            <label class="form-field">
+              <span>설명</span>
+              <textarea id="term-description" name="description" rows="3" placeholder="예: 실제 고객에게 제공되는 서비스 운영 환경"></textarea>
+            </label>
+            <label class="form-field">
+              <span>사용하지 않을 표기 <small>선택</small></span>
+              <input name="blockedTerm" type="text" placeholder="예: 운영 환경, 프로덕션" />
+              <small>여러 표현은 쉼표로 구분해 주세요.</small>
+            </label>
+          </div>
+        </div>
+
+        <label class="status-control">
+          <span><strong>등록 즉시 번역에 적용</strong><small>비활성화하면 목록에만 저장됩니다.</small></span>
+          <input name="active" type="checkbox" checked />
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+
+        <div class="dialog-actions">
+          <button class="secondary-dialog-button" type="button" data-close-dialog>취소</button>
+          <button class="primary-dialog-button" type="submit">용어 저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="member-dialog" class="entry-dialog" aria-labelledby="member-dialog-title">
+      <form id="member-form" class="entry-form" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <span class="dialog-kicker">PEOPLE</span>
+            <h2 id="member-dialog-title">새 멤버 등록</h2>
+            <p>여러 한국어 이름·호칭 표현을 하나의 일본어 표기로 통합합니다.</p>
+          </div>
+          <button class="dialog-close" type="button" data-close-dialog aria-label="닫기">×</button>
+        </div>
+
+        <div class="dialog-section">
+          <div class="section-number">01</div>
+          <div class="section-body">
+            <div class="form-section-heading">
+              <strong>언어별 표기와 호칭</strong>
+              <span>한국어에서 인식할 모든 표현과 하나의 일본어 표기를 등록해 주세요.</span>
+            </div>
+            <div class="form-grid">
+              <label class="form-field">
+                <span>한국어 인식 표현 <em>필수</em></span>
+                <div id="member-alias-editor" class="alias-editor" aria-describedby="member-alias-help">
+                  <div id="member-alias-chips" class="alias-chips"></div>
+                  <input id="member-alias-input" type="text" placeholder="표현 입력 후 Enter" aria-label="한국어 인식 표현 추가" />
+                </div>
+                <input id="member-alias-value" name="koreanAliases" type="hidden" required />
+                <small id="member-alias-help">예: 이시와타리 대표님, 이시와타리상, 이시와타리님 · Enter 또는 쉼표로 추가</small>
+              </label>
+              <label class="form-field">
+                <span>일본어 통합 표기 <em>필수</em></span>
+                <input id="member-japanese-output" name="japaneseOutput" type="text" value="石渡さん" placeholder="예: 石渡さん" required />
+                <small>위의 모든 한국어 표현이 이 표기 하나로 번역됩니다.</small>
+              </label>
+            </div>
+
+            <div class="mapping-preview" aria-live="polite">
+              <div class="mapping-preview-heading"><strong>적용 미리보기</strong><span>번역 시 아래 규칙을 자동 적용합니다.</span></div>
+              <div id="member-mapping-preview" class="mapping-preview-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <label class="status-control">
+          <span><strong>등록 즉시 번역에 적용</strong><small>비활성화하면 목록에만 저장됩니다.</small></span>
+          <input name="active" type="checkbox" checked />
+          <span class="switch" aria-hidden="true"></span>
+        </label>
+
+        <div class="dialog-actions">
+          <button class="secondary-dialog-button" type="button" data-close-dialog>취소</button>
+          <button class="primary-dialog-button" type="submit">멤버 저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite">복사했습니다.</div>
+    <script src="./script.js"></script>
+  </body>
+</html>
