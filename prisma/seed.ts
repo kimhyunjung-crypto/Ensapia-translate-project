@@ -55,6 +55,54 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
     },
   });
 
+  const titleSource = "대표님";
+  const titleDirection = "ko-ja";
+  await client.glossaryTerm.upsert({
+    where: { id: "seed-glossary-title" },
+    create: {
+      id: "seed-glossary-title",
+      sourceTextEnc: encryptText(titleSource, key, ENCRYPTION_CONTEXT.glossarySource),
+      sourceFingerprint: createSearchFingerprint(
+        titleSource,
+        key,
+        `${ENCRYPTION_CONTEXT.glossarySource}:${titleDirection}`,
+      ),
+      targetTextEnc: encryptText("代表様", key, ENCRYPTION_CONTEXT.glossaryTarget),
+      direction: titleDirection,
+      descriptionEnc: encryptText(
+        "일반 대표 호칭",
+        key,
+        ENCRYPTION_CONTEXT.glossaryDescription,
+      ),
+      forbiddenTermsEnc: encryptJson(
+        ["代表さん"],
+        key,
+        ENCRYPTION_CONTEXT.glossaryForbidden,
+      ),
+      createdAt: seedDate,
+    },
+    update: {
+      sourceTextEnc: encryptText(titleSource, key, ENCRYPTION_CONTEXT.glossarySource),
+      sourceFingerprint: createSearchFingerprint(
+        titleSource,
+        key,
+        `${ENCRYPTION_CONTEXT.glossarySource}:${titleDirection}`,
+      ),
+      targetTextEnc: encryptText("代表様", key, ENCRYPTION_CONTEXT.glossaryTarget),
+      descriptionEnc: encryptText(
+        "일반 대표 호칭",
+        key,
+        ENCRYPTION_CONTEXT.glossaryDescription,
+      ),
+      forbiddenTermsEnc: encryptJson(
+        ["代表さん"],
+        key,
+        ENCRYPTION_CONTEXT.glossaryForbidden,
+      ),
+      isActive: true,
+    },
+  });
+
   await client.person.upsert({
     where: { id: "seed-person-ishiwatari" },
     create: {

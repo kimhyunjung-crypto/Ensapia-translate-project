@@ -12,6 +12,7 @@ import { getDatabaseHealth } from "@/lib/database-health";
 import { GlossaryRepository } from "@/modules/glossary/repository";
 import { PeopleRepository } from "@/modules/people/repository";
 import { ToneRepository } from "@/modules/tone/repository";
+import { prepareFirstPassProviderRequests } from "@/modules/translation/provider-inputs";
 import { TranslationRepository } from "@/modules/translation/repository";
 import { seedDatabase } from "@/prisma/seed";
 
@@ -95,11 +96,46 @@ describe("EPIC 2 database foundation", () => {
     expect((await getDatabaseHealth(client, encryptionKey)).samples.message).toContain("연습 계정");
   });
 
+  it("loads encrypted rules and prepares identical provider inputs in priority order", async () => {
+    const sourceText = "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.";
+    const requests = await prepareFirstPassProviderRequests(
+      sourceText,
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+
+    expect(requests.openai.input).toEqual(requests.gemini.input);
+    expect(requests.openai.input.sourceText).toBe(sourceText);
+    expect(requests.openai.input.rules.map((rule) => [rule.type, rule.priority])).toEqual([
+      ["person", 1],
+      ["glossary", 2],
+      ["tone", 3],
+    ]);
+    expect(requests.openai.input.rules).toContainEqual(
+      expect.objectContaining({
+        ruleId: "seed-person-ishiwatari",
+        requiredText: "石渡さん",
+      }),
+    );
+    expect(requests.openai.input.rules).toContainEqual(
+      expect.objectContaining({
+        ruleId: "seed-glossary-ontos",
+        requiredText: "Ontos（IAM）",
+      }),
+    );
+    expect(requests.openai.input.rules).not.toContainEqual(
+      expect.objectContaining({ ruleId: "seed-glossary-title" }),
+    );
+  });
+
   it("keeps fake company, person, and message plaintext out of SQLite", () => {
     const rawDatabase = readFileSync(databasePath).toString("utf8");
 
     for (const plaintext of [
       "Ontos",
+      "대표님",
+      "代表様",
       "이시와타리",
       "石渡さん",
       "연습 계정 권한",
