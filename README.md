@@ -9,10 +9,12 @@ ENSAPIA Seoul의 한국어↔일본어 Slack 비즈니스 메시지 번역을 �
 
 ```powershell
 npm install
-Copy-Item .env.example .env.local
+npm run db:init
 ```
 
-`.env.local`에 `OPENAI_API_KEY`, `GEMINI_API_KEY`, `DATA_ENCRYPTION_KEY`를 입력하세요. 실제 회사 메시지를 사용하기 전까지 `DATA_MODE=demo`를 유지합니다. 비밀 값은 브라우저로 전달하거나 화면에 표시하지 않습니다.
+`db:init`은 `.env.local`의 32바이트 암호화 키를 값 노출 없이 만들고, SQLite 마이그레이션과 가짜 연습용 데이터를 준비합니다. 생성된 `DATA_ENCRYPTION_KEY`를 잃으면 기존 암호화 데이터를 복구할 수 없으므로 `.env.local`은 안전한 장소에 별도로 보관하세요.
+
+AI 기능을 연결할 때 `.env.local`에 `OPENAI_API_KEY`, `GEMINI_API_KEY`를 입력하세요. 실제 회사 메시지를 사용하기 전까지 `DATA_MODE=demo`를 유지합니다. 비밀 값은 브라우저로 전달하거나 화면에 표시하지 않습니다.
 
 ## 실행
 
@@ -21,6 +23,12 @@ npm run dev
 ```
 
 브라우저에서 `http://127.0.0.1:3000`을 엽니다. 개발·운영 서버 모두 `127.0.0.1`에만 바인딩됩니다.
+
+데이터 연결과 14개 표의 저장 건수는 다음 명령 또는 `/settings` 화면에서 확인할 수 있습니다.
+
+```powershell
+npm run db:status
+```
 
 ## 검증
 

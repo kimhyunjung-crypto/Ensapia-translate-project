@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GlossaryTerm {
+  id                String   @id @default(cuid())
+  sourceTextEnc     String   @map("source_text_enc")
+  sourceFingerprint String   @unique(map: "glossary_terms_source_fingerprint_key") @map("source_fingerprint")
+  targetTextEnc     String   @map("target_text_enc")
+  direction         String
+  descriptionEnc    String?  @map("description_enc")
+  forbiddenTermsEnc String?  @map("forbidden_terms_enc")
+  isActive          Boolean  @default(true) @map("is_active")
+  usedCount         Int      @default(0) @map("used_count")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([direction, isActive], map: "idx_glossary_terms_direction_active")
+  @@map("glossary_terms")
+}
+
+model Person {
+  id                   String        @id @default(cuid())
+  japaneseCanonicalEnc String        @map("japanese_canonical_enc")
+  koreanCanonicalEnc   String        @map("korean_canonical_enc")
+  isActive             Boolean       @default(true) @map("is_active")
+  usedCount            Int           @default(0) @map("used_count")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+  aliases              PersonAlias[]
+
+  @@index([isActive], map: "idx_people_active")
+  @@map("people")
+}
+
+model PersonAlias {
+  id               String   @id @default(cuid())
+  personId         String   @map("person_id")
+  aliasEnc         String   @map("alias_enc")
+  aliasFingerprint String   @unique(map: "person_aliases_alias_fingerprint_key") @map("alias_fingerprint")
+  createdAt        DateTime @default(now()) @map("created_at")
+  person           Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId], map: "idx_person_aliases_person_id")
+  @@map("person_aliases")
+}
+
+model ToneRule {
+  id                  String   @id @default(cuid())
+  situation           String   @unique(map: "tone_rules_situation_key")
+  recommendedToneEnc  String   @map("recommended_tone_enc")
+  cushionPhrasesEnc   String?  @map("cushion_phrases_enc")
+  forbiddenPhrasesEnc String?  @map("forbidden_phrases_enc")
+  exampleEnc          String?  @map("example_enc")
+  isActive            Boolean  @default(true) @map("is_active")
+  usedCount           Int      @default(0) @map("used_count")
+  version             Int      @default(1)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive], map: "idx_tone_rules_active")
+  @@map("tone_rules")
+}
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  provider  String
+  stage     String
+  version   String
+  template  String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, stage, version], map: "prompt_versions_provider_stage_version_key")
+  @@index([provider, stage, isActive], map: "idx_prompt_versions_provider_stage_active")
+  @@map("prompt_versions")
+}
+
+model ModelConfig {
+  id            String   @id @default(cuid())
+  provider      String
+  stage         String
+  modelId       String   @map("model_id")
+  settings      String   @default("{}")
+  isActive      Boolean  @default(true) @map("is_active")
+  effectiveFrom DateTime @map("effective_from")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, stage, effectiveFrom], map: "model_configs_provider_stage_effective_key")
+  @@index([provider, stage, isActive], map: "idx_model_configs_provider_stage_active")
+  @@map("model_configs")
+}
+
+model ModelPrice {
+  id                    String    @id @default(cuid())
+  provider              String
+  modelId               String    @map("model_id")
+  inputPricePerMillion  Float     @map("input_price_per_million")
+  outputPricePerMillion Float     @map("output_price_per_million")
+  effectiveFrom         DateTime  @map("effective_from")
+  effectiveTo           DateTime? @map("effective_to")
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  @@unique([provider, modelId, effectiveFrom], map: "model_prices_provider_model_effective_key")
+  @@index([provider, modelId, effectiveFrom], map: "idx_model_prices_lookup")
+  @@map("model_prices")
+}
+
+model TranslationJob {
+  id               String                @id @default(cuid())
+  sourceLanguage   String                @map("source_language")
+  targetLanguage   String                @map("target_language")
+  sourceTextEnc    String                @map("source_text_enc")
+  finalTextEnc     String?               @map("final_text_enc")
+  status           String
+  promptVersionIds String                @default("[]") @map("prompt_version_ids")
+  startedAt        DateTime              @default(now()) @map("started_at")
+  completedAt      DateTime?             @map("completed_at")
+  outputs          TranslationOutput[]
+  ruleSnapshots    AppliedRuleSnapshot[]
+  apiUsage         ApiUsage[]
+
+  @@index([startedAt], map: "idx_translation_jobs_started_at")
+  @@index([status], map: "idx_translation_jobs_status")
+  @@map("translation_jobs")
+}
+
+model TranslationOutput {
+  id            String         @id @default(cuid())
+  jobId         String         @map("job_id")
+  provider      String
+  stage         String
+  outputTextEnc String         @map("output_text_enc")
+  status        String
+  attempt       Int            @default(1)
+  latencyMs     Int?           @map("latency_ms")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  job           TranslationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, provider, stage, attempt], map: "translation_outputs_job_stage_attempt_key")
+  @@index([jobId], map: "idx_translation_outputs_job_id")
+  @@map("translation_outputs")
+}
+
+model AppliedRuleSnapshot {
+  id           String         @id @default(cuid())
+  jobId        String         @map("job_id")
+  ruleType     String         @map("rule_type")
+  ruleId       String?        @map("rule_id")
+  ruleVersion  Int            @map("rule_version")
+  snapshotEnc  String         @map("snapshot_enc")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  job          TranslationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId], map: "idx_applied_rule_snapshots_job_id")
+  @@index([ruleType, ruleId], map: "idx_applied_rule_snapshots_rule")
+  @@map("applied_rule_snapshots")
+}
+
+model ApiUsage {
+  id               String          @id @default(cuid())
+  jobId            String?         @map("job_id")
+  provider         String
+  modelId          String          @map("model_id")
+  stage            String
+  inputTokens      Int             @map("input_tokens")
+  outputTokens     Int             @map("output_tokens")
+  estimatedCostUsd Float           @map("estimated_cost_usd")
+  occurredAt       DateTime        @default(now()) @map("occurred_at")
+  job              TranslationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([jobId], map: "idx_api_usage_job_id")
+  @@index([occurredAt], map: "idx_api_usage_occurred_at")
+  @@index([provider, modelId], map: "idx_api_usage_provider_model")
+  @@map("api_usage")
+}
+
+model OperationLog {
+  id          String   @id @default(cuid())
+  category    String
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id")
+  result      String
+  errorCode   String?  @map("error_code")
+  safeMessage String?  @map("safe_message")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([category, createdAt], map: "idx_operation_logs_category_created")
+  @@map("operation_logs")
+}
+
+model DeletionLog {
+  id              String   @id @default(cuid())
+  dateFrom        DateTime @map("date_from")
+  dateTo          DateTime @map("date_to")
+  deletedJobCount Int      @map("deleted_job_count")
+  deletedAt       DateTime @default(now()) @map("deleted_at")
+
+  @@index([deletedAt], map: "idx_deletion_logs_deleted_at")
+  @@map("deletion_logs")
+}
+
+model AppSetting {
+  key       String   @id
+  valueJson String   @map("value_json")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}

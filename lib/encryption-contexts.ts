@@ -1,0 +1,17 @@
+export const ENCRYPTION_CONTEXT = {
+  glossarySource: "glossary_terms.source_text",
+  glossaryTarget: "glossary_terms.target_text",
+  glossaryDescription: "glossary_terms.description",
+  glossaryForbidden: "glossary_terms.forbidden_terms",
+  personJapanese: "people.japanese_canonical",
+  personKorean: "people.korean_canonical",
+  personAlias: "person_aliases.alias",
+  toneRecommended: "tone_rules.recommended_tone",
+  toneCushion: "tone_rules.cushion_phrases",
+  toneForbidden: "tone_rules.forbidden_phrases",
+  toneExample: "tone_rules.example",
+  translationSource: "translation_jobs.source_text",
+  translationFinal: "translation_jobs.final_text",
+  translationOutput: "translation_outputs.output_text",
+  ruleSnapshot: "applied_rule_snapshots.snapshot",
+} as const;

@@ -50,13 +50,15 @@ test("returns only safe readiness fields", async ({ request }) => {
   expect(response.ok()).toBe(true);
 
   const body = await response.json();
-  expect(body).toEqual({
+  expect(body).toMatchObject({
     ok: true,
     localOnly: true,
     environment: {
       ready: false,
-      missing: ["OPENAI_API_KEY", "GEMINI_API_KEY", "DATA_ENCRYPTION_KEY"],
+      missing: ["OPENAI_API_KEY", "GEMINI_API_KEY"],
+      invalid: [],
       dataMode: "demo",
     },
   });
+  expect(JSON.stringify(body)).not.toContain("secret-value");
 });

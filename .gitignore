@@ -15,6 +15,9 @@
 !/.env.example
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+/generated/
 
 # logs and OS files
 *.log
