@@ -7,8 +7,20 @@ const normalizedRequiredText = (label: string, maximum: number) =>
     .min(1, `${label}: 내용을 입력해 주세요.`)
     .max(maximum, `${label}: ${maximum.toLocaleString("ko-KR")}자 이내로 입력해 주세요.`);
 
+export const TRANSLATION_CHARACTER_LIMIT = 3_000;
+
+export function countCharacters(value: string): number {
+  return Array.from(value).length;
+}
+
 export const translationInputSchema = z.object({
-  sourceText: normalizedRequiredText("번역할 문장", 3_000),
+  sourceText: z
+    .string({ error: "번역할 문장: 글자 형식이어야 합니다." })
+    .refine((value) => value.trim().length > 0, "번역할 문장을 입력해 주세요.")
+    .refine(
+      (value) => countCharacters(value) <= TRANSLATION_CHARACTER_LIMIT,
+      "번역할 문장은 공백과 줄바꿈을 포함해 3,000자 이내로 입력해 주세요.",
+    ),
 });
 
 export const glossaryInputSchema = z.object({

@@ -10,8 +10,8 @@ test("opens the Focus White translation screen and shows safe setup guidance", a
   await expect(page.getByTestId("setup-notice")).toContainText("AI 연결 준비가 필요합니다");
   await expect(page.getByText("openai-secret-value")).toHaveCount(0);
 
-  const primaryPreview = page.getByText("번역하기", { exact: false }).first();
-  await expect(primaryPreview).toHaveCSS("background-color", "rgb(41, 81, 218)");
+  const primaryAction = page.getByRole("button", { name: "번역하기" });
+  await expect(primaryAction).toHaveCSS("background-color", "rgb(41, 81, 218)");
 });
 
 test("moves through all four work areas from the top navigation", async ({ page }) => {
