@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTranslatePost } from "@/app/api/translate/route";
+import { AppError } from "@/lib/errors";
 
 function requestWithJson(value: unknown): Request {
   return new Request("http://127.0.0.1:3000/api/translate", {
@@ -11,11 +12,35 @@ function requestWithJson(value: unknown): Request {
 }
 
 describe("demo translation route", () => {
-  const prepareProviderRequests = vi.fn(async () => undefined);
-  const post = createTranslatePost(prepareProviderRequests);
+  const translate = vi.fn(async (sourceText: string) => {
+    if (sourceText === "Ontos 123") {
+      throw new AppError(
+        "UNSUPPORTED_LANGUAGE",
+        "한국어 또는 일본어가 포함된 메시지를 입력해 주세요.",
+      );
+    }
+
+    const japanese = sourceText.includes("資料");
+    return japanese
+      ? {
+          direction: "ja-ko" as const,
+          sourceLanguage: "ja" as const,
+          targetLanguage: "ko" as const,
+          finalText: "안녕하세요. 자료를 확인해 주세요.",
+          demo: true,
+        }
+      : {
+          direction: "ko-ja" as const,
+          sourceLanguage: "ko" as const,
+          targetLanguage: "ja" as const,
+          finalText: "こんにちは。会議の日程をご確認いただけますでしょうか。",
+          demo: true,
+        };
+  });
+  const post = createTranslatePost(translate);
 
   beforeEach(() => {
-    prepareProviderRequests.mockClear();
+    translate.mockClear();
   });
 
   it("returns one Japanese final result for Korean text", async () => {
@@ -35,7 +60,7 @@ describe("demo translation route", () => {
       demo: true,
     });
     expect(JSON.stringify(body)).not.toMatch(/openai|gemini|gpt/i);
-    expect(prepareProviderRequests).toHaveBeenCalledWith(sourceText, "ko-ja");
+    expect(translate).toHaveBeenCalledWith(sourceText);
   });
 
   it("returns one Korean final result for Japanese text", async () => {
@@ -66,6 +91,6 @@ describe("demo translation route", () => {
     });
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toMatchObject({ error: { code: "INVALID_JSON" } });
-    expect(prepareProviderRequests).not.toHaveBeenCalled();
+    expect(translate).toHaveBeenCalledTimes(1);
   });
 });

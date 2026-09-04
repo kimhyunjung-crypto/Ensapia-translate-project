@@ -11,7 +11,7 @@ const DEMO_TRANSLATIONS = new Map<string, string>([
   ],
   [
     "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.",
-    "石渡さん、Ontosの練習用アカウント権限をご確認いただけますでしょうか。",
+    "石渡さん、Ontos（IAM）の練習用アカウント権限をご確認いただけますでしょうか。",
   ],
   [
     "お世話になっております。資料をご確認ください。",
@@ -20,8 +20,8 @@ const DEMO_TRANSLATIONS = new Map<string, string>([
 ]);
 
 const FALLBACK_TRANSLATIONS: Record<TranslationDirection, string> = {
-  "ko-ja": "画面動作確認用のデモ翻訳です。AI翻訳はEPIC 5で接続されます。",
-  "ja-ko": "화면 동작 확인용 데모 번역입니다. AI 번역은 EPIC 5에서 연결됩니다.",
+  "ko-ja": "デモモードの練習用翻訳です。実際のAIはrealモードで使用します。",
+  "ja-ko": "데모 모드의 연습용 번역입니다. 실제 AI는 real 모드에서 사용합니다.",
 };
 
 export type DemoTranslation = {
