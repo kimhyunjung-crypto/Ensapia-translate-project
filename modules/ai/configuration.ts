@@ -8,9 +8,9 @@ import type {
   StageConfiguration,
 } from "@/modules/ai/types";
 
-type ConfigurationKey = keyof PipelineConfiguration;
+export type ConfigurationKey = keyof PipelineConfiguration;
 
-const REQUIRED_STAGES: ReadonlyArray<{
+export const REQUIRED_STAGES: ReadonlyArray<{
   key: ConfigurationKey;
   provider: AiProviderName;
   stage: AiStage;

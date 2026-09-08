@@ -12,6 +12,13 @@ function requestWithJson(value: unknown): Request {
 }
 
 describe("demo translation route", () => {
+  const loadCostGuard = vi.fn(async () => ({
+    state: "normal" as const,
+    spentUsd: 1,
+    limitUsd: 10,
+    warningAtUsd: 8,
+    usageRatio: 0.1,
+  }));
   const translate = vi.fn(async (sourceText: string) => {
     if (sourceText === "Ontos 123") {
       throw new AppError(
@@ -37,10 +44,11 @@ describe("demo translation route", () => {
           demo: true,
         };
   });
-  const post = createTranslatePost(translate);
+  const post = createTranslatePost(translate, loadCostGuard);
 
   beforeEach(() => {
     translate.mockClear();
+    loadCostGuard.mockClear();
   });
 
   it("returns one Japanese final result for Korean text", async () => {
@@ -92,5 +100,28 @@ describe("demo translation route", () => {
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toMatchObject({ error: { code: "INVALID_JSON" } });
     expect(translate).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires explicit confirmation after the monthly limit is reached", async () => {
+    const limitedGuard = vi.fn(async () => ({
+      state: "confirmation_required" as const,
+      spentUsd: 10,
+      limitUsd: 10,
+      warningAtUsd: 8,
+      usageRatio: 1,
+    }));
+    const limitedPost = createTranslatePost(translate, limitedGuard);
+    const sourceText = "비용 한도 이후 번역을 확인합니다.";
+
+    const blocked = await limitedPost(requestWithJson({ sourceText }));
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({
+      error: { code: "COST_CONFIRMATION_REQUIRED" },
+    });
+    expect(translate).not.toHaveBeenCalled();
+
+    const confirmed = await limitedPost(requestWithJson({ sourceText, costConfirmed: true }));
+    expect(confirmed.status).toBe(200);
+    expect(translate).toHaveBeenCalledWith(sourceText);
   });
 });

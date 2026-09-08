@@ -222,7 +222,7 @@ Git 저장소를 기준으로 SQLite 데이터를 Supabase PostgreSQL로 이전�
 
 - 예상 월 사용량은 300건, 월 AI 비용 한도는 $10으로 확정한다.
 - 월 비용 한도는 달러 기준으로 저장하고 화면에는 원화 환산값을 참고로 함께 보여준다.
-- 공식 모델 단가를 `model_configs`에 버전과 적용 시작일로 저장해 과거 비용 계산 기준을 추적한다.
+- 공식 모델 단가를 `model_prices`에 적용 시작일·종료일과 함께 저장해 과거 비용 계산 기준을 추적한다.
 - $8에 도달하면 경고하고 $10부터 번역할 때마다 계속할지 확인한다. 확인 후에는 번역을 막지 않는다.
 - 1차 번역·교차검토는 GPT-5.6 Luna와 Gemini 3.7 Flash, 최종 종합은 GPT-5.6 Luna로 확정했다.
 - 비용 기준 출처: [OpenAI 공식 모델 비교](https://developers.openai.com/api/docs/models/compare), [Gemini 공식 API 요금](https://ai.google.dev/gemini-api/docs/pricing), [Vercel 공식 요금](https://vercel.com/pricing), [Supabase 공식 요금](https://supabase.com/pricing)

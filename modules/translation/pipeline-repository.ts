@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { encryptJson, encryptText } from "@/lib/crypto";
 import { ENCRYPTION_CONTEXT } from "@/lib/encryption-contexts";
+import { calculateTokenCost, findApplicablePrice } from "@/modules/operations/cost";
 import type { AppliedRule } from "@/modules/rules/engine";
 import type { ExecutedCall, TranslationPipelineResult } from "@/modules/translation/pipeline";
 import type { FirstPassProviderInput } from "@/modules/translation/provider-inputs";
@@ -55,6 +56,17 @@ export async function saveCompletedPipeline(input: {
   const startedAt = new Date(Math.min(...calls.map(({ call }) => call.startedAt)));
   const completedAt = new Date(result.final.completedAt);
   const promptVersionIds = [...new Set(calls.map(({ call }) => call.promptVersionId))];
+  const usageCosts = await Promise.all(
+    calls.map(async ({ call }) => {
+      const price = await findApplicablePrice(
+        client,
+        call.provider,
+        call.modelId,
+        new Date(call.completedAt),
+      );
+      return price ? calculateTokenCost(call.usage, price) : 0;
+    }),
+  );
 
   return client.$transaction(async (transaction) => {
     const job = await transaction.translationJob.create({
@@ -95,13 +107,13 @@ export async function saveCompletedPipeline(input: {
           })),
         },
         apiUsage: {
-          create: calls.map(({ call }) => ({
+          create: calls.map(({ call }, index) => ({
             provider: call.provider,
             modelId: call.modelId,
             stage: call.stage,
             inputTokens: call.usage.inputTokens,
             outputTokens: call.usage.outputTokens,
-            estimatedCostUsd: 0,
+            estimatedCostUsd: usageCosts[index],
             occurredAt: new Date(call.completedAt),
           })),
         },

@@ -30,6 +30,16 @@ type ErrorResponse = {
   error?: { message?: string };
 };
 
+type CostGuardResponse = {
+  ok: true;
+  guard: {
+    state: "normal" | "warning" | "confirmation_required";
+    spentUsd: number;
+    limitUsd: number;
+    warningAtUsd: number;
+  };
+};
+
 const MINIMUM_PROGRESS_TIME = 400;
 
 function wait(milliseconds: number): Promise<void> {
@@ -47,6 +57,20 @@ function isTranslationResponse(value: unknown): value is TranslationResponse {
   );
 }
 
+function isCostGuardResponse(value: unknown): value is CostGuardResponse {
+  if (!value || typeof value !== "object") return false;
+  const response = value as Partial<CostGuardResponse>;
+  return Boolean(
+    response.ok === true &&
+      response.guard &&
+      ["normal", "warning", "confirmation_required"].includes(response.guard.state),
+  );
+}
+
+function usd(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
 export function TranslationWorkspace() {
   const [sourceText, setSourceText] = useState("");
   const [state, setState] = useState<TranslationState>("idle");
@@ -56,6 +80,7 @@ export function TranslationWorkspace() {
   const [copyState, setCopyState] = useState<CopyState>("idle");
   const [targetLanguage, setTargetLanguage] = useState<"ko" | "ja" | null>(null);
   const [isDemoResult, setIsDemoResult] = useState(false);
+  const [costNotice, setCostNotice] = useState("");
 
   const characterCount = countCharacters(sourceText);
   const detection = useMemo(() => detectTranslationDirection(sourceText), [sourceText]);
@@ -69,6 +94,7 @@ export function TranslationWorkspace() {
     setCopyState("idle");
     setTargetLanguage(null);
     setIsDemoResult(false);
+    setCostNotice("");
 
     if (countCharacters(value) > TRANSLATION_CHARACTER_LIMIT) {
       setInputError(
@@ -100,11 +126,43 @@ export function TranslationWorkspace() {
     setState("translating");
 
     try {
+      const guardResponse = await fetch("/api/operations/cost-guard", { cache: "no-store" });
+      const guardBody = (await guardResponse.json().catch(() => null)) as
+        | CostGuardResponse
+        | ErrorResponse
+        | null;
+      if (!guardResponse.ok || !isCostGuardResponse(guardBody)) {
+        const safeMessage = guardBody && "error" in guardBody ? guardBody.error?.message : undefined;
+        throw new Error(safeMessage || "비용 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+
+      let costConfirmed = false;
+      if (guardBody.guard.state === "warning") {
+        setCostNotice(
+          `이번 달 예상 비용이 ${usd(guardBody.guard.spentUsd)}로 ` +
+            `${usd(guardBody.guard.warningAtUsd)} 경고 기준에 도달했습니다.`,
+        );
+      } else if (guardBody.guard.state === "confirmation_required") {
+        const confirmed = window.confirm(
+          `이번 달 예상 비용 ${usd(guardBody.guard.spentUsd)}이 ` +
+            `${usd(guardBody.guard.limitUsd)} 한도에 도달했습니다. 그래도 번역할까요?`,
+        );
+        if (!confirmed) {
+          setCostNotice("비용 한도 확인에서 번역을 취소했습니다. 원문은 그대로 유지됩니다.");
+          setState("idle");
+          return;
+        }
+        costConfirmed = true;
+        setCostNotice("비용 한도를 확인하고 이번 번역을 계속합니다.");
+      } else {
+        setCostNotice("");
+      }
+
       const [response] = await Promise.all([
         fetch("/api/translate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sourceText }),
+          body: JSON.stringify({ sourceText, costConfirmed }),
         }),
         wait(MINIMUM_PROGRESS_TIME),
       ]);
@@ -145,6 +203,7 @@ export function TranslationWorkspace() {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
+      {costNotice && <p className="cost-notice" role="status">{costNotice}</p>}
       <div className="translation-grid" aria-label="번역 작업 영역">
         <article className="translation-card source-card">
           <div className="card-header">

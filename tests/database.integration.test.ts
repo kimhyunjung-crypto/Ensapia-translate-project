@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { decryptText } from "@/lib/crypto";
+import { decryptText, encryptJson, encryptText } from "@/lib/crypto";
 import { createPrismaClient } from "@/lib/database";
 import { getDatabaseHealth } from "@/lib/database-health";
 import { ENCRYPTION_CONTEXT } from "@/lib/encryption-contexts";
@@ -15,6 +15,13 @@ import { reviewOutputSchema } from "@/modules/ai/schemas";
 import { GlossaryRepository } from "@/modules/glossary/repository";
 import { PeopleRepository } from "@/modules/people/repository";
 import { ToneRepository } from "@/modules/tone/repository";
+import { findApplicablePrice } from "@/modules/operations/cost";
+import {
+  deleteTranslationsByDate,
+  previewTranslationDeletion,
+  updateModelConfigurations,
+} from "@/modules/operations/service";
+import { loadPipelineConfiguration } from "@/modules/ai/configuration";
 import { prepareFirstPassProviderRequests } from "@/modules/translation/provider-inputs";
 import { TranslationRepository } from "@/modules/translation/repository";
 import { executeTranslation } from "@/modules/translation/service";
@@ -375,6 +382,105 @@ describe("EPIC 2 database foundation", () => {
     expect(await tone.findById(disposable.id)).toBeNull();
   });
 
+  it("versions model changes and selects the official price for each effective date", async () => {
+    await updateModelConfigurations(
+      client,
+      [{ provider: "openai", stage: "draft", modelId: "gpt-5.6-luna-epic9-test" }],
+      new Date("2026-02-01T03:00:00.000Z"),
+    );
+    const changed = await loadPipelineConfiguration(client, new Date("2026-02-01T04:00:00.000Z"));
+    expect(changed.openaiDraft.modelId).toBe("gpt-5.6-luna-epic9-test");
+    expect(await client.modelConfig.count({
+      where: { provider: "openai", stage: "draft", isActive: false },
+    })).toBeGreaterThan(0);
+
+    await updateModelConfigurations(
+      client,
+      [{ provider: "openai", stage: "draft", modelId: "gpt-5.6-luna" }],
+      new Date("2026-03-01T05:00:00.000Z"),
+    );
+    const restored = await loadPipelineConfiguration(client, new Date("2026-03-01T06:00:00.000Z"));
+    expect(restored.openaiDraft.modelId).toBe("gpt-5.6-luna");
+    expect(await client.modelConfig.count({
+      where: { provider: "openai", stage: "draft", isActive: true },
+    })).toBe(1);
+
+    const promotional = await findApplicablePrice(
+      client,
+      "gemini",
+      "gemini-3.7-flash",
+      new Date("2026-12-31T23:59:59.999Z"),
+    );
+    const standard = await findApplicablePrice(
+      client,
+      "gemini",
+      "gemini-3.7-flash",
+      new Date("2027-01-01T00:00:00.000Z"),
+    );
+    expect(promotional).toMatchObject({ inputPricePerMillion: 0.75, outputPricePerMillion: 3.75 });
+    expect(standard).toMatchObject({ inputPricePerMillion: 1.5, outputPricePerMillion: 7.5 });
+  });
+
+  it("permanently deletes translation contents by KST date while preserving usage totals", async () => {
+    const jobId = "epic9-deletion-job";
+    await client.translationJob.create({
+      data: {
+        id: jobId,
+        sourceLanguage: "ko",
+        targetLanguage: "ja",
+        sourceTextEnc: encryptText("EPIC 9 삭제 연습 원문", encryptionKey, ENCRYPTION_CONTEXT.translationSource),
+        finalTextEnc: encryptText("EPIC 9 삭제 연습 결과", encryptionKey, ENCRYPTION_CONTEXT.translationFinal),
+        status: "completed",
+        startedAt: new Date("2035-06-15T03:00:00.000Z"),
+        completedAt: new Date("2035-06-15T03:00:01.000Z"),
+        outputs: {
+          create: {
+            provider: "openai",
+            stage: "final",
+            outputTextEnc: encryptText("삭제할 중간 결과", encryptionKey, ENCRYPTION_CONTEXT.translationOutput),
+            status: "completed",
+          },
+        },
+        ruleSnapshots: {
+          create: {
+            ruleType: "tone",
+            ruleVersion: 1,
+            snapshotEnc: encryptJson({ situation: "삭제 테스트" }, encryptionKey, ENCRYPTION_CONTEXT.ruleSnapshot),
+          },
+        },
+        apiUsage: {
+          create: {
+            provider: "openai",
+            modelId: "gpt-5.6-luna",
+            stage: "final",
+            inputTokens: 10,
+            outputTokens: 5,
+            estimatedCostUsd: 0.000008,
+            occurredAt: new Date("2035-06-15T03:00:01.000Z"),
+          },
+        },
+      },
+    });
+    const usage = await client.apiUsage.findFirstOrThrow({ where: { jobId } });
+    expect(await previewTranslationDeletion(client, "2035-06-15", "2035-06-15")).toBe(1);
+
+    await expect(
+      deleteTranslationsByDate(client, "2035-06-15", "2035-06-15", 2),
+    ).rejects.toMatchObject({ code: "DELETION_COUNT_CHANGED" });
+    const result = await deleteTranslationsByDate(client, "2035-06-15", "2035-06-15", 1);
+    expect(result.deletedJobCount).toBe(1);
+    expect(await client.translationJob.findUnique({ where: { id: jobId } })).toBeNull();
+    expect(await client.translationOutput.count({ where: { jobId } })).toBe(0);
+    expect(await client.appliedRuleSnapshot.count({ where: { jobId } })).toBe(0);
+    expect(await client.apiUsage.findUnique({ where: { id: usage.id } })).toMatchObject({
+      jobId: null,
+      estimatedCostUsd: 0.000008,
+    });
+    expect(await client.deletionLog.findFirst({
+      where: { deletedJobCount: 1, dateFrom: new Date("2035-06-14T15:00:00.000Z") },
+    })).not.toBeNull();
+  });
+
   it("stores five pipeline outputs, structured reviews, timing, usage, and rules encrypted", async () => {
     const sourceText = "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.";
     const beforeCount = await client.translationJob.count();
@@ -400,6 +506,7 @@ describe("EPIC 2 database foundation", () => {
     ).toBe(translation.finalText);
     expect(job?.outputs).toHaveLength(5);
     expect(job?.apiUsage).toHaveLength(5);
+    expect(job?.apiUsage.every((usage) => usage.estimatedCostUsd > 0)).toBe(true);
     expect(job?.ruleSnapshots.map((snapshot) => snapshot.ruleType)).toEqual([
       "person",
       "glossary",

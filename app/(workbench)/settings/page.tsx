@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { OperationsWorkspace } from "@/components/operations-workspace";
+import { ToneRulesWorkspace } from "@/components/tone-rules-workspace";
 import {
   DATABASE_TABLE_LABELS,
   getDatabaseHealth,
   type DatabaseHealth,
 } from "@/lib/database-health";
-import { ToneRulesWorkspace } from "@/components/tone-rules-workspace";
 
 export const metadata: Metadata = { title: "운영 설정" };
 export const runtime = "nodejs";
@@ -24,12 +25,14 @@ export default async function SettingsPage() {
     <section aria-labelledby="settings-title">
       <div className="page-intro">
         <div>
-          <p className="section-kicker">SETTINGS · TONE &amp; DATA</p>
+          <p className="section-kicker">SETTINGS · AI · COST · DATA</p>
           <h2 id="settings-title">운영 설정</h2>
-          <p>상황별 번역 말투를 관리하고 로컬 데이터 연결 상태를 점검합니다.</p>
+          <p>AI 연결과 비용, 저장 정책, 상황별 번역 말투를 관리합니다.</p>
         </div>
         <span className="privacy-badge">AES-256-GCM · 로컬 저장</span>
       </div>
+
+      <OperationsWorkspace />
 
       <ToneRulesWorkspace />
 

@@ -370,8 +370,21 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
         effectiveFrom: seedDate,
         createdAt: seedDate,
       },
-      update: { modelId: model.modelId, isActive: true },
+      update: {},
     });
+
+    const activeConfigurations = await client.modelConfig.findMany({
+      where: { provider: model.provider, stage: model.stage, isActive: true },
+      orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+    const inactiveIds = activeConfigurations.slice(1).map((configuration) => configuration.id);
+    if (inactiveIds.length > 0) {
+      await client.modelConfig.updateMany({
+        where: { id: { in: inactiveIds } },
+        data: { isActive: false },
+      });
+    }
   }
 
   await client.modelPrice.upsert({
@@ -380,15 +393,55 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
       id: "seed-price-openai-demo",
       provider: "openai",
       modelId: "gpt-5.6-luna",
-      inputPricePerMillion: 1,
-      outputPricePerMillion: 2,
+      inputPricePerMillion: 0.2,
+      outputPricePerMillion: 1.2,
       effectiveFrom: seedDate,
       createdAt: seedDate,
     },
     update: {
       modelId: "gpt-5.6-luna",
-      inputPricePerMillion: 1,
-      outputPricePerMillion: 2,
+      inputPricePerMillion: 0.2,
+      outputPricePerMillion: 1.2,
+      effectiveTo: null,
+    },
+  });
+
+  await client.modelPrice.upsert({
+    where: { id: "seed-price-gemini-2026" },
+    create: {
+      id: "seed-price-gemini-2026",
+      provider: "gemini",
+      modelId: "gemini-3.7-flash",
+      inputPricePerMillion: 0.75,
+      outputPricePerMillion: 3.75,
+      effectiveFrom: new Date("2026-08-13T00:00:00.000Z"),
+      effectiveTo: new Date("2026-12-31T23:59:59.999Z"),
+      createdAt: seedDate,
+    },
+    update: {
+      inputPricePerMillion: 0.75,
+      outputPricePerMillion: 3.75,
+      effectiveFrom: new Date("2026-08-13T00:00:00.000Z"),
+      effectiveTo: new Date("2026-12-31T23:59:59.999Z"),
+    },
+  });
+
+  await client.modelPrice.upsert({
+    where: { id: "seed-price-gemini-2027" },
+    create: {
+      id: "seed-price-gemini-2027",
+      provider: "gemini",
+      modelId: "gemini-3.7-flash",
+      inputPricePerMillion: 1.5,
+      outputPricePerMillion: 7.5,
+      effectiveFrom: new Date("2027-01-01T00:00:00.000Z"),
+      createdAt: seedDate,
+    },
+    update: {
+      inputPricePerMillion: 1.5,
+      outputPricePerMillion: 7.5,
+      effectiveFrom: new Date("2027-01-01T00:00:00.000Z"),
+      effectiveTo: null,
     },
   });
 
@@ -469,14 +522,14 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
       stage: "draft",
       inputTokens: 34,
       outputTokens: 28,
-      estimatedCostUsd: 0.00009,
+      estimatedCostUsd: 0.0000404,
       occurredAt: seedDate,
     },
     update: {
       modelId: "gpt-5.6-luna",
       inputTokens: 34,
       outputTokens: 28,
-      estimatedCostUsd: 0.00009,
+      estimatedCostUsd: 0.0000404,
     },
   });
 
@@ -515,6 +568,16 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
       updatedAt: seedDate,
     },
     update: { valueJson: JSON.stringify({ dataMode: "demo", retentionDays: 30 }) },
+  });
+
+  await client.appSetting.upsert({
+    where: { key: "cost-policy" },
+    create: {
+      key: "cost-policy",
+      valueJson: JSON.stringify({ monthlyLimitUsd: 10 }),
+      updatedAt: seedDate,
+    },
+    update: {},
   });
 }
 
