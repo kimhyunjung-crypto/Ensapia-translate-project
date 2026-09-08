@@ -190,6 +190,102 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
     },
   });
 
+  for (const tone of [
+    {
+      id: "seed-tone-greeting",
+      situation: "인사",
+      recommendedTone: "밝고 정중한 업무 인사",
+      cushionPhrases: ["안녕하세요"],
+      forbiddenPhrases: ["야"],
+      example: "안녕하세요. 오늘도 잘 부탁드립니다.",
+    },
+    {
+      id: "seed-tone-refusal",
+      situation: "거절",
+      recommendedTone: "상대의 요청을 존중하며 대안을 덧붙이는 어조",
+      cushionPhrases: ["죄송하지만"],
+      forbiddenPhrases: ["안 됩니다"],
+      example: "죄송하지만 이번 일정은 어렵습니다. 다음 일정을 제안드립니다.",
+    },
+    {
+      id: "seed-tone-apology",
+      situation: "사과",
+      recommendedTone: "책임을 분명히 하고 간결하게 사과하는 어조",
+      cushionPhrases: ["불편을 드려 죄송합니다"],
+      forbiddenPhrases: ["어쩔 수 없었습니다"],
+      example: "불편을 드려 죄송합니다. 바로 확인하겠습니다.",
+    },
+    {
+      id: "seed-tone-reminder",
+      situation: "독촉",
+      recommendedTone: "상대의 상황을 배려하며 기한을 분명히 알리는 어조",
+      cushionPhrases: ["바쁘시겠지만"],
+      forbiddenPhrases: ["당장"],
+      example: "바쁘시겠지만 오늘 중 확인을 부탁드립니다.",
+    },
+    {
+      id: "seed-tone-confirmation",
+      situation: "확인",
+      recommendedTone: "확인 항목을 명확하고 정중하게 전달하는 어조",
+      cushionPhrases: ["번거로우시겠지만"],
+      forbiddenPhrases: ["확실히 하세요"],
+      example: "번거로우시겠지만 아래 내용을 확인해 주세요.",
+    },
+    {
+      id: "seed-tone-thanks",
+      situation: "감사",
+      recommendedTone: "구체적인 도움을 언급하는 따뜻한 감사 어조",
+      cushionPhrases: ["도와주셔서 감사합니다"],
+      forbiddenPhrases: ["수고"],
+      example: "빠르게 도와주셔서 감사합니다.",
+    },
+  ]) {
+    await client.toneRule.upsert({
+      where: { id: tone.id },
+      create: {
+        id: tone.id,
+        situation: tone.situation,
+        recommendedToneEnc: encryptText(
+          tone.recommendedTone,
+          key,
+          ENCRYPTION_CONTEXT.toneRecommended,
+        ),
+        cushionPhrasesEnc: encryptJson(
+          tone.cushionPhrases,
+          key,
+          ENCRYPTION_CONTEXT.toneCushion,
+        ),
+        forbiddenPhrasesEnc: encryptJson(
+          tone.forbiddenPhrases,
+          key,
+          ENCRYPTION_CONTEXT.toneForbidden,
+        ),
+        exampleEnc: encryptText(tone.example, key, ENCRYPTION_CONTEXT.toneExample),
+        createdAt: seedDate,
+      },
+      update: {
+        situation: tone.situation,
+        recommendedToneEnc: encryptText(
+          tone.recommendedTone,
+          key,
+          ENCRYPTION_CONTEXT.toneRecommended,
+        ),
+        cushionPhrasesEnc: encryptJson(
+          tone.cushionPhrases,
+          key,
+          ENCRYPTION_CONTEXT.toneCushion,
+        ),
+        forbiddenPhrasesEnc: encryptJson(
+          tone.forbiddenPhrases,
+          key,
+          ENCRYPTION_CONTEXT.toneForbidden,
+        ),
+        exampleEnc: encryptText(tone.example, key, ENCRYPTION_CONTEXT.toneExample),
+        isActive: true,
+      },
+    });
+  }
+
   for (const prompt of [
     {
       id: "seed-prompt-openai-draft",

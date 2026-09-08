@@ -11,6 +11,7 @@ export const ENCRYPTION_CONTEXT = {
   toneCushion: "tone_rules.cushion_phrases",
   toneForbidden: "tone_rules.forbidden_phrases",
   toneExample: "tone_rules.example",
+  toneChange: "operation_logs.tone_change",
   translationSource: "translation_jobs.source_text",
   translationFinal: "translation_jobs.final_text",
   translationOutput: "translation_outputs.output_text",

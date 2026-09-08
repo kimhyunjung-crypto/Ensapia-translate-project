@@ -80,7 +80,7 @@ describe("EPIC 2 database foundation", () => {
       aliases: ["야마다 담당자님"],
     });
     await tone.create({
-      situation: "감사",
+      situation: "검토",
       recommendedTone: "정중하고 간결한 감사",
       cushionPhrases: [],
       forbiddenPhrases: [],
@@ -283,6 +283,98 @@ describe("EPIC 2 database foundation", () => {
     expect(await people.findById(disposable.id)).toBeNull();
   });
 
+  it("manages versioned tone rules and applies only active rules to AI inputs", async () => {
+    const tone = new ToneRepository(client, encryptionKey);
+    const standardSituations = (await tone.list()).map((rule) => rule.situation);
+    expect(standardSituations).toEqual(
+      expect.arrayContaining(["인사", "요청", "거절", "사과", "독촉", "확인", "감사"]),
+    );
+
+    const created = await tone.create({
+      situation: "공유",
+      recommendedTone: "EPIC 8 정중 공유 어조",
+      cushionPhrases: ["참고 부탁드립니다", " 참고 부탁드립니다 "],
+      forbiddenPhrases: ["꼭 보세요"],
+      example: "참고하실 내용을 공유드립니다.",
+      isActive: true,
+    });
+    expect(created).toMatchObject({
+      cushionPhrases: ["참고 부탁드립니다"],
+      version: 1,
+      isActive: true,
+    });
+
+    const updated = await tone.update(created.id, {
+      situation: created.situation,
+      recommendedTone: "EPIC 8 배려하는 공유 어조",
+      cushionPhrases: created.cushionPhrases,
+      forbiddenPhrases: created.forbiddenPhrases,
+      example: "참고 부탁드리며 관련 내용을 공유드립니다.",
+      isActive: true,
+    });
+    expect(updated.version).toBe(2);
+
+    const history = await tone.history(created.id);
+    expect(history.map((entry) => entry.action)).toEqual(["updated", "created"]);
+    expect(history[0].changedFields).toEqual(["권장 어조", "예문"]);
+    expect(history[0].before?.recommendedTone).toBe("EPIC 8 정중 공유 어조");
+    expect(history[0].after?.recommendedTone).toBe("EPIC 8 배려하는 공유 어조");
+
+    const activeRequests = await prepareFirstPassProviderRequests(
+      "공유 내용을 전달드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(activeRequests.openai.input.rules).toContainEqual(
+      expect.objectContaining({
+        type: "tone",
+        ruleId: created.id,
+        version: 2,
+        recommendedTone: "EPIC 8 배려하는 공유 어조",
+      }),
+    );
+
+    const deactivated = await tone.setActive(created.id, false);
+    expect(deactivated).toMatchObject({ isActive: false, version: 3 });
+    const inactiveRequests = await prepareFirstPassProviderRequests(
+      "공유 내용을 전달드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(inactiveRequests.openai.input.rules).not.toContainEqual(
+      expect.objectContaining({ ruleId: created.id }),
+    );
+    expect((await tone.history(created.id))[0]).toMatchObject({
+      action: "deactivated",
+      changedFields: ["사용 상태"],
+      version: 3,
+    });
+
+    await expect(
+      tone.create({
+        situation: "  공유  ",
+        recommendedTone: "중복 규칙",
+        cushionPhrases: [],
+        forbiddenPhrases: [],
+      }),
+    ).rejects.toMatchObject({ code: "DUPLICATE_TONE_SITUATION" });
+
+    await client.toneRule.update({ where: { id: created.id }, data: { usedCount: 1 } });
+    await expect(tone.deleteUnused(created.id)).rejects.toMatchObject({ code: "TONE_RULE_IN_USE" });
+    expect(await tone.findById(created.id)).toMatchObject({ isActive: false, usedCount: 1 });
+
+    const disposable = await tone.create({
+      situation: "삭제용 안내",
+      recommendedTone: "삭제 가능한 말투",
+      cushionPhrases: [],
+      forbiddenPhrases: [],
+    });
+    await tone.deleteUnused(disposable.id);
+    expect(await tone.findById(disposable.id)).toBeNull();
+  });
+
   it("stores five pipeline outputs, structured reviews, timing, usage, and rules encrypted", async () => {
     const sourceText = "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.";
     const beforeCount = await client.translationJob.count();
@@ -357,6 +449,13 @@ describe("EPIC 2 database foundation", () => {
       "사토부장",
       "削除可能さん",
       "삭제 가능한 별칭",
+      "EPIC 8 정중 공유 어조",
+      "EPIC 8 배려하는 공유 어조",
+      "참고 부탁드립니다",
+      "꼭 보세요",
+      "참고하실 내용을 공유드립니다.",
+      "참고 부탁드리며 관련 내용을 공유드립니다.",
+      "삭제 가능한 말투",
     ]) {
       expect(rawDatabase).not.toContain(plaintext);
     }

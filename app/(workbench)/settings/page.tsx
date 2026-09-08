@@ -4,6 +4,7 @@ import {
   getDatabaseHealth,
   type DatabaseHealth,
 } from "@/lib/database-health";
+import { ToneRulesWorkspace } from "@/components/tone-rules-workspace";
 
 export const metadata: Metadata = { title: "운영 설정" };
 export const runtime = "nodejs";
@@ -23,12 +24,14 @@ export default async function SettingsPage() {
     <section aria-labelledby="settings-title">
       <div className="page-intro">
         <div>
-          <p className="section-kicker">SETTINGS · DATA FOUNDATION</p>
+          <p className="section-kicker">SETTINGS · TONE &amp; DATA</p>
           <h2 id="settings-title">운영 설정</h2>
-          <p>로컬 데이터 연결과 암호화된 연습용 자료를 점검합니다.</p>
+          <p>상황별 번역 말투를 관리하고 로컬 데이터 연결 상태를 점검합니다.</p>
         </div>
         <span className="privacy-badge">AES-256-GCM · 로컬 저장</span>
       </div>
+
+      <ToneRulesWorkspace />
 
       {health ? (
         <div className="system-check-grid">

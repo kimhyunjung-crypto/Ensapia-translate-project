@@ -55,9 +55,14 @@ export const toneRuleInputSchema = z.object({
   example: z.string().trim().max(3_000, "예문은 3,000자 이하여야 합니다.").optional(),
 });
 
+export const toneRuleFormInputSchema = toneRuleInputSchema.extend({
+  isActive: z.boolean({ error: "사용 상태를 확인해 주세요." }).default(true),
+});
+
 export type TranslationInput = z.infer<typeof translationInputSchema>;
 export type GlossaryInput = z.infer<typeof glossaryInputSchema>;
 export type GlossaryFormInput = z.infer<typeof glossaryFormInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
 export type PersonFormInput = z.infer<typeof personFormInputSchema>;
 export type ToneRuleInput = z.infer<typeof toneRuleInputSchema>;
+export type ToneRuleFormInput = z.infer<typeof toneRuleFormInputSchema>;
