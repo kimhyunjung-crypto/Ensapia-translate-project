@@ -17,6 +17,7 @@ model GlossaryTerm {
   forbiddenTermsEnc String?  @map("forbidden_terms_enc")
   isActive          Boolean  @default(true) @map("is_active")
   usedCount         Int      @default(0) @map("used_count")
+  version           Int      @default(1)
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -30,6 +31,7 @@ model Person {
   koreanCanonicalEnc   String        @map("korean_canonical_enc")
   isActive             Boolean       @default(true) @map("is_active")
   usedCount            Int           @default(0) @map("used_count")
+  version              Int           @default(1)
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
   aliases              PersonAlias[]

@@ -15,5 +15,6 @@ export const ENCRYPTION_CONTEXT = {
   translationSource: "translation_jobs.source_text",
   translationFinal: "translation_jobs.final_text",
   translationOutput: "translation_outputs.output_text",
+  translationRecovery: "process_memory.translation_recovery",
   ruleSnapshot: "applied_rule_snapshots.snapshot",
 } as const;

@@ -12,6 +12,7 @@ import {
   buildDraftPrompt,
   buildFinalPrompt,
   buildReviewPrompt,
+  hardenSystemInstruction,
 } from "@/modules/translation/prompts";
 import type { FirstPassProviderRequests } from "@/modules/translation/provider-inputs";
 
@@ -22,6 +23,39 @@ export type ExecutedCall<T> = ProviderCallResult<T> & {
   promptVersionId: string;
   attempt: number;
 };
+
+export type PipelineAttemptRecord = {
+  provider: AiProviderName;
+  stage: AiStage;
+  modelId: string;
+  promptVersionId: string;
+  attempt: number;
+  status: "completed" | "failed";
+  startedAt: number;
+  completedAt: number;
+  outputText?: string;
+  usage?: ProviderCallResult<unknown>["usage"];
+  errorCode?: string;
+  safeMessage?: string;
+};
+
+export class TranslationPipelineFailure extends AppError {
+  constructor(
+    causeError: unknown,
+    public readonly attempts: PipelineAttemptRecord[],
+  ) {
+    const safe = causeError instanceof AppError
+      ? causeError
+      : new AppError(
+          "AI_PIPELINE_FAILED",
+          "번역 단계 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+          502,
+        );
+    super(safe.code, safe.message, safe.status);
+    this.name = "TranslationPipelineFailure";
+    this.cause = causeError;
+  }
+}
 
 export type TranslationPipelineResult = {
   finalText: string;
@@ -35,6 +69,7 @@ export type TranslationPipelineResult = {
   };
   final: ExecutedCall<FinalOutput>;
   quality: QualityCheck;
+  attempts: PipelineAttemptRecord[];
 };
 
 type PipelineProviders = {
@@ -45,18 +80,49 @@ type PipelineProviders = {
 async function withSingleRetry<T>(
   run: () => Promise<ProviderCallResult<T>>,
   metadata: Omit<ExecutedCall<T>, keyof ProviderCallResult<T> | "attempt">,
+  serialize: (data: T) => string,
+  attempts: PipelineAttemptRecord[],
 ): Promise<ExecutedCall<T>> {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const fallbackStartedAt = Date.now();
     try {
-      return { ...(await run()), ...metadata, attempt };
+      const result = await run();
+      attempts.push({
+        ...metadata,
+        attempt,
+        status: "completed",
+        startedAt: result.startedAt,
+        completedAt: result.completedAt,
+        outputText: serialize(result.data),
+        usage: result.usage,
+      });
+      return { ...result, ...metadata, attempt };
     } catch (error) {
       lastError = error;
+      attempts.push({
+        ...metadata,
+        attempt,
+        status: "failed",
+        startedAt: fallbackStartedAt,
+        completedAt: Date.now(),
+        errorCode: error instanceof AppError ? error.code : "AI_CALL_FAILED",
+        safeMessage: error instanceof AppError
+          ? error.message
+          : "AI 단계 실행에 실패했습니다.",
+      });
     }
   }
 
   throw lastError;
+}
+
+async function settleBoth<A, B>(left: Promise<A>, right: Promise<B>): Promise<[A, B]> {
+  const [leftResult, rightResult] = await Promise.allSettled([left, right]);
+  if (leftResult.status === "rejected") throw leftResult.reason;
+  if (rightResult.status === "rejected") throw rightResult.reason;
+  return [leftResult.value, rightResult.value];
 }
 
 function metadata(configuration: PipelineConfiguration[keyof PipelineConfiguration]) {
@@ -74,90 +140,107 @@ export async function executeTranslationPipeline(input: {
   configuration: PipelineConfiguration;
 }): Promise<TranslationPipelineResult> {
   const { requests, providers, configuration } = input;
-  const [openaiDraft, geminiDraft] = await Promise.all([
-    withSingleRetry(
-      () =>
-        providers.openai.translate({
-          condition: requests.openai.input,
-          modelId: configuration.openaiDraft.modelId,
-          systemInstruction: configuration.openaiDraft.systemInstruction,
-          prompt: buildDraftPrompt(requests.openai.input),
-        }),
-      metadata(configuration.openaiDraft),
-    ),
-    withSingleRetry(
-      () =>
-        providers.gemini.translate({
-          condition: requests.gemini.input,
-          modelId: configuration.geminiDraft.modelId,
-          systemInstruction: configuration.geminiDraft.systemInstruction,
-          prompt: buildDraftPrompt(requests.gemini.input),
-        }),
-      metadata(configuration.geminiDraft),
-    ),
-  ]);
+  const attempts: PipelineAttemptRecord[] = [];
 
-  const [openaiReview, geminiReview] = await Promise.all([
-    withSingleRetry(
-      () => {
-        const review = {
-          condition: requests.openai.input,
-          candidateProvider: "gemini" as const,
-          candidateText: geminiDraft.data.translatedText,
-        };
-        return providers.openai.review({
-          ...review,
-          modelId: configuration.openaiReview.modelId,
-          systemInstruction: configuration.openaiReview.systemInstruction,
-          prompt: buildReviewPrompt(review),
-        });
-      },
-      metadata(configuration.openaiReview),
-    ),
-    withSingleRetry(
-      () => {
-        const review = {
-          condition: requests.gemini.input,
-          candidateProvider: "openai" as const,
-          candidateText: openaiDraft.data.translatedText,
-        };
-        return providers.gemini.review({
-          ...review,
-          modelId: configuration.geminiReview.modelId,
-          systemInstruction: configuration.geminiReview.systemInstruction,
-          prompt: buildReviewPrompt(review),
-        });
-      },
-      metadata(configuration.geminiReview),
-    ),
-  ]);
+  try {
+    const [openaiDraft, geminiDraft] = await settleBoth(
+      withSingleRetry(
+        () =>
+          providers.openai.translate({
+            condition: requests.openai.input,
+            modelId: configuration.openaiDraft.modelId,
+            systemInstruction: hardenSystemInstruction(configuration.openaiDraft.systemInstruction),
+            prompt: buildDraftPrompt(requests.openai.input),
+          }),
+        metadata(configuration.openaiDraft),
+        (data) => data.translatedText,
+        attempts,
+      ),
+      withSingleRetry(
+        () =>
+          providers.gemini.translate({
+            condition: requests.gemini.input,
+            modelId: configuration.geminiDraft.modelId,
+            systemInstruction: hardenSystemInstruction(configuration.geminiDraft.systemInstruction),
+            prompt: buildDraftPrompt(requests.gemini.input),
+          }),
+        metadata(configuration.geminiDraft),
+        (data) => data.translatedText,
+        attempts,
+      ),
+    );
 
-  if (!providers.openai.synthesize) {
-    throw new AppError("AI_CONFIGURATION_MISSING", "최종 종합 모델 설정을 확인해 주세요.", 500);
+    const [openaiReview, geminiReview] = await settleBoth(
+      withSingleRetry(
+        () => {
+          const review = {
+            condition: requests.openai.input,
+            candidateProvider: "gemini" as const,
+            candidateText: geminiDraft.data.translatedText,
+          };
+          return providers.openai.review({
+            ...review,
+            modelId: configuration.openaiReview.modelId,
+            systemInstruction: hardenSystemInstruction(configuration.openaiReview.systemInstruction),
+            prompt: buildReviewPrompt(review),
+          });
+        },
+        metadata(configuration.openaiReview),
+        JSON.stringify,
+        attempts,
+      ),
+      withSingleRetry(
+        () => {
+          const review = {
+            condition: requests.gemini.input,
+            candidateProvider: "openai" as const,
+            candidateText: openaiDraft.data.translatedText,
+          };
+          return providers.gemini.review({
+            ...review,
+            modelId: configuration.geminiReview.modelId,
+            systemInstruction: hardenSystemInstruction(configuration.geminiReview.systemInstruction),
+            prompt: buildReviewPrompt(review),
+          });
+        },
+        metadata(configuration.geminiReview),
+        JSON.stringify,
+        attempts,
+      ),
+    );
+
+    if (!providers.openai.synthesize) {
+      throw new AppError("AI_CONFIGURATION_MISSING", "최종 종합 모델 설정을 확인해 주세요.", 500);
+    }
+
+    const finalInput = {
+      condition: requests.openai.input,
+      drafts: { openai: openaiDraft.data, gemini: geminiDraft.data },
+      reviews: { openai: openaiReview.data, gemini: geminiReview.data },
+    };
+    const final = await withSingleRetry(
+      () =>
+        providers.openai.synthesize!({
+          ...finalInput,
+          modelId: configuration.openaiFinal.modelId,
+          systemInstruction: hardenSystemInstruction(configuration.openaiFinal.systemInstruction),
+          prompt: buildFinalPrompt(finalInput),
+        }),
+      metadata(configuration.openaiFinal),
+      (data) => data.finalText,
+      attempts,
+    );
+    const quality = assertTranslationQuality(requests.openai.input, final.data.finalText);
+
+    return {
+      finalText: final.data.finalText,
+      drafts: { openai: openaiDraft, gemini: geminiDraft },
+      reviews: { openai: openaiReview, gemini: geminiReview },
+      final,
+      quality,
+      attempts,
+    };
+  } catch (error) {
+    throw new TranslationPipelineFailure(error, attempts);
   }
-
-  const finalInput = {
-    condition: requests.openai.input,
-    drafts: { openai: openaiDraft.data, gemini: geminiDraft.data },
-    reviews: { openai: openaiReview.data, gemini: geminiReview.data },
-  };
-  const final = await withSingleRetry(
-    () =>
-      providers.openai.synthesize!({
-        ...finalInput,
-        modelId: configuration.openaiFinal.modelId,
-        systemInstruction: configuration.openaiFinal.systemInstruction,
-        prompt: buildFinalPrompt(finalInput),
-      }),
-    metadata(configuration.openaiFinal),
-  );
-  const quality = assertTranslationQuality(requests.openai.input, final.data.finalText);
-
-  return {
-    finalText: final.data.finalText,
-    drafts: { openai: openaiDraft, gemini: geminiDraft },
-    reviews: { openai: openaiReview, gemini: geminiReview },
-    final,
-    quality,
-  };
 }

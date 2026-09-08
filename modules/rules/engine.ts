@@ -7,7 +7,7 @@ export type PersonAppliedRule = {
   type: "person";
   priority: 1;
   ruleId: string;
-  version: 1;
+  version: number;
   matchedTexts: string[];
   requiredText: string;
 };
@@ -16,7 +16,7 @@ export type GlossaryAppliedRule = {
   type: "glossary";
   priority: 2;
   ruleId: string;
-  version: 1;
+  version: number;
   matchedText: string;
   requiredText: string;
   forbiddenTerms: string[];
@@ -155,7 +155,7 @@ function selectPersonRules(
       type: "person",
       priority: 1,
       ruleId: person.id,
-      version: 1,
+      version: person.version,
       matchedTexts: uniqueTexts(texts),
       requiredText:
         direction === "ko-ja" ? person.japaneseCanonical : person.koreanCanonical,
@@ -201,7 +201,7 @@ function selectGlossaryRules(
         type: "glossary",
         priority: 2,
         ruleId: candidate.term.id,
-        version: 1,
+        version: candidate.term.version,
         matchedText: candidate.matchedText,
         requiredText: candidate.term.targetText,
         forbiddenTerms: [...candidate.term.forbiddenTerms],

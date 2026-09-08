@@ -12,6 +12,10 @@ import { createPrismaClient } from "@/lib/database";
 import { getDatabaseHealth } from "@/lib/database-health";
 import { ENCRYPTION_CONTEXT } from "@/lib/encryption-contexts";
 import { reviewOutputSchema } from "@/modules/ai/schemas";
+import type { DraftOutput } from "@/modules/ai/schemas";
+import { AiProviderError } from "@/modules/ai/errors";
+import { DemoTranslationProvider } from "@/modules/ai/demo-provider";
+import type { DraftProviderRequest, ProviderCallResult } from "@/modules/ai/types";
 import { GlossaryRepository } from "@/modules/glossary/repository";
 import { PeopleRepository } from "@/modules/people/repository";
 import { ToneRepository } from "@/modules/tone/repository";
@@ -24,7 +28,11 @@ import {
 import { loadPipelineConfiguration } from "@/modules/ai/configuration";
 import { prepareFirstPassProviderRequests } from "@/modules/translation/provider-inputs";
 import { TranslationRepository } from "@/modules/translation/repository";
-import { executeTranslation } from "@/modules/translation/service";
+import {
+  executeTranslation,
+  retryTranslationSave,
+  TranslationSaveError,
+} from "@/modules/translation/service";
 import { seedDatabase } from "@/prisma/seed";
 
 const require = createRequire(import.meta.url);
@@ -33,6 +41,27 @@ const databasePath = join(temporaryDirectory, "integration.db");
 const databaseUrl = `file:${databasePath.replaceAll("\\", "/")}`;
 const encryptionKey = randomBytes(32);
 let client: PrismaClient;
+
+class FailOnceDraftProvider extends DemoTranslationProvider {
+  draftCalls = 0;
+
+  override async translate(
+    request: DraftProviderRequest,
+  ): Promise<ProviderCallResult<DraftOutput>> {
+    this.draftCalls += 1;
+    if (this.draftCalls === 1) throw new AiProviderError(this.provider, "draft");
+    return super.translate(request);
+  }
+}
+
+class FailAlwaysDraftProvider extends DemoTranslationProvider {
+  draftCalls = 0;
+
+  override async translate(): Promise<ProviderCallResult<DraftOutput>> {
+    this.draftCalls += 1;
+    throw new AiProviderError(this.provider, "draft");
+  }
+}
 
 describe("EPIC 2 database foundation", () => {
   beforeAll(async () => {
@@ -476,9 +505,18 @@ describe("EPIC 2 database foundation", () => {
       jobId: null,
       estimatedCostUsd: 0.000008,
     });
-    expect(await client.deletionLog.findFirst({
+    const deletionLog = await client.deletionLog.findFirst({
       where: { deletedJobCount: 1, dateFrom: new Date("2035-06-14T15:00:00.000Z") },
-    })).not.toBeNull();
+    });
+    expect(deletionLog).not.toBeNull();
+    expect(Object.keys(deletionLog ?? {}).sort()).toEqual([
+      "dateFrom",
+      "dateTo",
+      "deletedAt",
+      "deletedJobCount",
+      "id",
+    ]);
+    expect(JSON.stringify(deletionLog)).not.toMatch(/EPIC 9|삭제 연습|중간 결과/);
   });
 
   it("stores five pipeline outputs, structured reviews, timing, usage, and rules encrypted", async () => {
@@ -507,11 +545,18 @@ describe("EPIC 2 database foundation", () => {
     expect(job?.outputs).toHaveLength(5);
     expect(job?.apiUsage).toHaveLength(5);
     expect(job?.apiUsage.every((usage) => usage.estimatedCostUsd > 0)).toBe(true);
-    expect(job?.ruleSnapshots.map((snapshot) => snapshot.ruleType)).toEqual([
+    expect(
+      job?.ruleSnapshots
+        .filter((snapshot) => snapshot.ruleType !== "ai_configuration")
+        .map((snapshot) => snapshot.ruleType),
+    ).toEqual([
       "person",
       "glossary",
       "tone",
     ]);
+    expect(
+      job?.ruleSnapshots.filter((snapshot) => snapshot.ruleType === "ai_configuration"),
+    ).toHaveLength(5);
     expect(JSON.parse(job?.promptVersionIds ?? "[]")).toHaveLength(5);
 
     const reviewOutputs = job?.outputs.filter((output) => output.stage === "review") ?? [];
@@ -532,6 +577,172 @@ describe("EPIC 2 database foundation", () => {
     const secondEnd = secondDraft.createdAt.getTime() + (secondDraft.latencyMs ?? 0);
     expect(firstDraft.createdAt.getTime()).toBeLessThan(secondEnd);
     expect(secondDraft.createdAt.getTime()).toBeLessThan(firstEnd);
+  });
+
+  it("stores the failed attempt and successful retry without rerunning the other provider", async () => {
+    const openai = new FailOnceDraftProvider("openai");
+    const gemini = new DemoTranslationProvider("gemini");
+    const before = new Date();
+
+    await executeTranslation("재시도 기록을 확인 부탁드립니다.", {
+      client,
+      key: encryptionKey,
+      mode: "demo",
+      providers: { openai, gemini },
+    });
+    const job = await client.translationJob.findFirstOrThrow({
+      where: { startedAt: { gte: before } },
+      orderBy: { startedAt: "desc" },
+      include: { outputs: true },
+    });
+    const openaiDrafts = job.outputs
+      .filter((output) => output.provider === "openai" && output.stage === "draft")
+      .sort((left, right) => left.attempt - right.attempt);
+    const logs = await client.operationLog.findMany({
+      where: { category: "translation", targetId: job.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    expect(openai.draftCalls).toBe(2);
+    expect(openaiDrafts.map((output) => [output.attempt, output.status])).toEqual([
+      [1, "failed"],
+      [2, "completed"],
+    ]);
+    expect(job.outputs.filter((output) => output.provider === "gemini" && output.stage === "draft"))
+      .toHaveLength(1);
+    expect(logs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "openai.draft.attempt.1", result: "failure" }),
+      expect.objectContaining({ action: "openai.draft.attempt.2", result: "success" }),
+      expect.objectContaining({ action: "pipeline.complete", result: "success" }),
+    ]));
+  });
+
+  it("keeps an encrypted failed job when a stage still fails after its single retry", async () => {
+    const sourceText = "영구 실패 기록을 확인 부탁드립니다.";
+    const openai = new FailAlwaysDraftProvider("openai");
+    const gemini = new DemoTranslationProvider("gemini");
+    const before = new Date();
+
+    await expect(
+      executeTranslation(sourceText, {
+        client,
+        key: encryptionKey,
+        mode: "demo",
+        providers: { openai, gemini },
+      }),
+    ).rejects.toMatchObject({ code: "AI_PROVIDER_FAILED" });
+
+    const job = await client.translationJob.findFirstOrThrow({
+      where: { status: "failed", startedAt: { gte: before } },
+      orderBy: { startedAt: "desc" },
+      include: { outputs: true, apiUsage: true, ruleSnapshots: true },
+    });
+    const logs = await client.operationLog.findMany({
+      where: { category: "translation", targetId: job.id },
+    });
+
+    expect(openai.draftCalls).toBe(2);
+    expect(job.finalTextEnc).toBeNull();
+    expect(job.outputs.map((output) => output.status).sort()).toEqual([
+      "completed",
+      "failed",
+      "failed",
+    ]);
+    expect(job.apiUsage).toHaveLength(1);
+    expect(job.ruleSnapshots.filter((snapshot) => snapshot.ruleType === "ai_configuration"))
+      .toHaveLength(5);
+    expect(logs.find((log) => log.action === "pipeline.complete")).toMatchObject({
+      result: "failure",
+      errorCode: "AI_PROVIDER_FAILED",
+    });
+    expect(JSON.stringify(logs)).not.toContain(sourceText);
+  });
+
+  it("saves exact rule and AI configuration snapshots before and after a rule edit", async () => {
+    const glossary = new GlossaryRepository(client, encryptionKey);
+    const term = await glossary.create({
+      sourceText: "EpicTenVersion",
+      targetText: "初回表記",
+      direction: "ko-ja",
+      forbiddenTerms: [],
+    });
+    await executeTranslation("EpicTenVersion 확인을 부탁드립니다.", {
+      client,
+      key: encryptionKey,
+      mode: "demo",
+    });
+    const updated = await glossary.update(term.id, {
+      sourceText: term.sourceText,
+      targetText: "変更後表記",
+      direction: term.direction,
+      forbiddenTerms: [],
+      isActive: true,
+    });
+    await executeTranslation("EpicTenVersion 확인을 부탁드립니다.", {
+      client,
+      key: encryptionKey,
+      mode: "demo",
+    });
+
+    const snapshots = await client.appliedRuleSnapshot.findMany({
+      where: { ruleId: term.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(updated.version).toBe(term.version + 1);
+    expect(snapshots.map((snapshot) => snapshot.ruleVersion)).toEqual([1, 2]);
+    expect(
+      snapshots.map((snapshot) =>
+        JSON.parse(decryptText(
+          snapshot.snapshotEnc,
+          encryptionKey,
+          ENCRYPTION_CONTEXT.ruleSnapshot,
+        )),
+      ),
+    ).toEqual([
+      expect.objectContaining({ requiredText: "初回表記", version: 1 }),
+      expect.objectContaining({ requiredText: "変更後表記", version: 2 }),
+    ]);
+
+    const latestJob = await client.translationJob.findFirstOrThrow({
+      where: { ruleSnapshots: { some: { ruleId: term.id, ruleVersion: 2 } } },
+      include: { ruleSnapshots: true, apiUsage: true },
+    });
+    expect(latestJob.ruleSnapshots.filter((snapshot) => snapshot.ruleType === "ai_configuration"))
+      .toHaveLength(5);
+    expect(JSON.parse(latestJob.promptVersionIds)).toHaveLength(5);
+    expect(latestJob.apiUsage.map((usage) => usage.modelId)).toHaveLength(5);
+  });
+
+  it("recovers a completed translation save without making another AI pipeline run", async () => {
+    const beforeCount = await client.translationJob.count();
+    let saveError: unknown;
+    try {
+      await executeTranslation("저장 복구 기능을 확인 부탁드립니다.", {
+        client,
+        key: encryptionKey,
+        mode: "demo",
+        persistCompleted: async () => {
+          throw new Error("temporary database failure");
+        },
+      });
+    } catch (error) {
+      saveError = error;
+    }
+
+    expect(saveError).toBeInstanceOf(TranslationSaveError);
+    expect(await client.translationJob.count()).toBe(beforeCount);
+    const recovered = await retryTranslationSave(
+      (saveError as TranslationSaveError).recoveryId,
+      { client, key: encryptionKey },
+    );
+    expect(recovered.finalText).toContain("デモモード");
+    expect(await client.translationJob.count()).toBe(beforeCount + 1);
+    await expect(
+      retryTranslationSave((saveError as TranslationSaveError).recoveryId, {
+        client,
+        key: encryptionKey,
+      }),
+    ).rejects.toMatchObject({ code: "TRANSLATION_RECOVERY_NOT_FOUND" });
   });
 
   it("keeps fake company, person, and message plaintext out of SQLite", () => {
@@ -563,6 +774,11 @@ describe("EPIC 2 database foundation", () => {
       "참고하실 내용을 공유드립니다.",
       "참고 부탁드리며 관련 내용을 공유드립니다.",
       "삭제 가능한 말투",
+      "EpicTenVersion",
+      "初回表記",
+      "変更後表記",
+      "영구 실패 기록을 확인 부탁드립니다.",
+      "저장 복구 기능을 확인 부탁드립니다.",
     ]) {
       expect(rawDatabase).not.toContain(plaintext);
     }

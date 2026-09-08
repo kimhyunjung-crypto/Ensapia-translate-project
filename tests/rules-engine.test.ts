@@ -14,6 +14,7 @@ const people: PersonRecord[] = [
     aliases: ["이시와타리 대표님", "이시와타리상"],
     isActive: true,
     usedCount: 0,
+    version: 1,
   },
 ];
 
@@ -26,6 +27,7 @@ const glossary: GlossaryTermRecord[] = [
     forbiddenTerms: [],
     isActive: true,
     usedCount: 0,
+    version: 1,
   },
   {
     id: "glossary-ontos",
@@ -35,6 +37,7 @@ const glossary: GlossaryTermRecord[] = [
     forbiddenTerms: ["온토스"],
     isActive: true,
     usedCount: 0,
+    version: 1,
   },
 ];
 

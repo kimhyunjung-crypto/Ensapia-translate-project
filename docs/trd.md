@@ -100,7 +100,7 @@ flowchart LR
 7. 프로그램이 목표 언어 잔존 여부, 숫자, 고정 표기와 누락을 검사한다.
 8. 원문·모든 결과·사용 규칙·오류·토큰·예상 비용을 한 작업으로 저장하고 최종 번역만 화면에 반환한다.
 
-AI 호출 단계는 각각 별도 상태로 기록한다. 실패한 단계만 한 번 자동 재시도하고, 성공한 결과는 다시 호출하지 않는다.
+AI 호출 단계는 각각 별도 상태로 기록한다. 실패한 단계만 한 번 자동 재시도하고, 성공한 결과는 다시 호출하지 않는다. 번역은 완료됐지만 DB 저장만 실패하면 완료 결과를 서버 메모리에 AES-256-GCM으로 최대 10분간 보관하고 복구 ID로 저장만 다시 시도한다. 복구 요청은 AI를 다시 호출하지 않으며 성공 즉시 메모리 사본을 제거한다.
 
 ## ③ 데이터 모델
 
@@ -108,8 +108,8 @@ AI 호출 단계는 각각 별도 상태로 기록한다. 실패한 단계만 �
 
 | 시트(테이블) | 주요 열 | 예시 한 줄 | 보호 방법 |
 |---|---|---|---|
-| `glossary_terms` 회사 용어 | id, source_text_enc, source_fingerprint, target_text_enc, direction, description_enc, forbidden_terms_enc, is_active, used_count, created_at, updated_at | `Ontos` → `Ontos(IAM)`, 양방향, 사용 중 | 표기·설명 암호화, 중복 확인은 원문을 복원하지 않는 지문값 사용 |
-| `people` 인명 통합 표기 | id, japanese_canonical_enc, korean_canonical_enc, is_active, used_count, created_at, updated_at | `石渡さん` ↔ `이시와타리님` | 인명 표기 암호화 |
+| `glossary_terms` 회사 용어 | id, source_text_enc, source_fingerprint, target_text_enc, direction, description_enc, forbidden_terms_enc, is_active, used_count, version, created_at, updated_at | `Ontos` → `Ontos(IAM)`, 양방향, 사용 중 | 표기·설명 암호화, 중복 확인은 원문을 복원하지 않는 지문값 사용 |
+| `people` 인명 통합 표기 | id, japanese_canonical_enc, korean_canonical_enc, is_active, used_count, version, created_at, updated_at | `石渡さん` ↔ `이시와타리님` | 인명 표기 암호화 |
 | `person_aliases` 한국어 인식 표현 | id, person_id, alias_enc, alias_fingerprint, created_at | `이시와타리 대표님` → people 1 | 인식 표현 암호화, 중복 확인은 지문값 사용 |
 | `tone_rules` 상황별 말투 | id, situation, recommended_tone_enc, cushion_phrases_enc, forbidden_phrases_enc, example_enc, is_active, used_count, version | 요청 → 정중한 쿠션어 사용 | 말투 내용과 예문 암호화 |
 | `prompt_versions` AI 지시문 버전 | id, provider, stage, version, template, is_active, created_at | OpenAI·1차 번역·v1 | 운영자만 관리 |

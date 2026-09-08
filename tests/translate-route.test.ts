@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTranslatePost } from "@/app/api/translate/route";
 import { AppError } from "@/lib/errors";
+import { TranslationSaveError } from "@/modules/translation/service";
 
 function requestWithJson(value: unknown): Request {
   return new Request("http://127.0.0.1:3000/api/translate", {
@@ -123,5 +124,27 @@ describe("demo translation route", () => {
     const confirmed = await limitedPost(requestWithJson({ sourceText, costConfirmed: true }));
     expect(confirmed.status).toBe(200);
     expect(translate).toHaveBeenCalledWith(sourceText);
+  });
+
+  it("returns a dedicated recovery token when only persistence fails", async () => {
+    const recoveryId = "aa58b192-1ed8-4384-b14d-9de638d86f2a";
+    const saveFailure = vi.fn(async () => {
+      throw new TranslationSaveError(recoveryId);
+    });
+    const saveFailurePost = createTranslatePost(saveFailure, loadCostGuard);
+
+    const response = await saveFailurePost(
+      requestWithJson({ sourceText: "저장 실패를 구분해 주세요." }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: {
+        code: "TRANSLATION_SAVE_FAILED",
+        message: "번역은 완료했지만 기록을 저장하지 못했습니다. AI를 다시 호출하지 않고 저장만 다시 시도해 주세요.",
+      },
+      recoveryId,
+    });
   });
 });

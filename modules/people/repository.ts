@@ -9,6 +9,7 @@ export type PersonRecord = PersonInput & {
   id: string;
   isActive: boolean;
   usedCount: number;
+  version: number;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -66,9 +67,17 @@ export class PeopleRepository {
   }
 
   async update(id: string, input: PersonWriteInput): Promise<PersonRecord> {
-    await this.requireById(id);
+    const existing = await this.requireById(id);
     const value = this.parseInput(input);
     await this.assertAliasesAvailable(value.aliases, id);
+    if (
+      existing.japaneseCanonical === value.japaneseCanonical &&
+      existing.koreanCanonical === value.koreanCanonical &&
+      existing.isActive === value.isActive &&
+      JSON.stringify(existing.aliases) === JSON.stringify(value.aliases)
+    ) {
+      return existing;
+    }
 
     return this.client.$transaction(async (transaction) => {
       await transaction.personAlias.deleteMany({ where: { personId: id } });
@@ -86,6 +95,7 @@ export class PeopleRepository {
             ENCRYPTION_CONTEXT.personKorean,
           ),
           isActive: value.isActive,
+          version: { increment: 1 },
           aliases: { create: value.aliases.map((alias) => this.aliasData(alias)) },
         },
         include: { aliases: { orderBy: { createdAt: "asc" } } },
@@ -96,10 +106,11 @@ export class PeopleRepository {
   }
 
   async setActive(id: string, isActive: boolean): Promise<PersonRecord> {
-    await this.requireById(id);
+    const existing = await this.requireById(id);
+    if (existing.isActive === isActive) return existing;
     const row = await this.client.person.update({
       where: { id },
-      data: { isActive },
+      data: { isActive, version: { increment: 1 } },
       include: { aliases: { orderBy: { createdAt: "asc" } } },
     });
 
@@ -182,6 +193,7 @@ export class PeopleRepository {
       ),
       isActive: row.isActive,
       usedCount: row.usedCount,
+      version: row.version,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

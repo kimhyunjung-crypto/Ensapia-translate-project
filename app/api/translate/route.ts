@@ -7,6 +7,7 @@ import { getCostGuard } from "@/modules/operations/service";
 import {
   executeTranslation,
   type CompletedTranslation,
+  TranslationSaveError,
 } from "@/modules/translation/service";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,16 @@ export function createTranslatePost(
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch (error) {
+      if (error instanceof TranslationSaveError) {
+        return Response.json(
+          {
+            ok: false,
+            error: { code: error.code, message: error.message },
+            recoveryId: error.recoveryId,
+          },
+          { status: error.status, headers: { "Cache-Control": "no-store" } },
+        );
+      }
       return safeErrorResponse(error);
     }
   };

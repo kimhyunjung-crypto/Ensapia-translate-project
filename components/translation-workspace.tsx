@@ -12,7 +12,13 @@ import {
   translationInputSchema,
 } from "@/lib/validation";
 
-type TranslationState = "idle" | "translating" | "success" | "error";
+type TranslationState =
+  | "idle"
+  | "translating"
+  | "saving"
+  | "save_error"
+  | "success"
+  | "error";
 type CopyState = "idle" | "copied" | "error";
 
 type TranslationResponse = {
@@ -27,7 +33,8 @@ type TranslationResponse = {
 
 type ErrorResponse = {
   ok: false;
-  error?: { message?: string };
+  error?: { code?: string; message?: string };
+  recoveryId?: string;
 };
 
 type CostGuardResponse = {
@@ -67,6 +74,18 @@ function isCostGuardResponse(value: unknown): value is CostGuardResponse {
   );
 }
 
+function isSaveFailureResponse(
+  value: unknown,
+): value is ErrorResponse & { recoveryId: string } {
+  if (!value || typeof value !== "object") return false;
+  const response = value as ErrorResponse;
+  return Boolean(
+    response.ok === false &&
+      response.error?.code === "TRANSLATION_SAVE_FAILED" &&
+      typeof response.recoveryId === "string",
+  );
+}
+
 function usd(value: number): string {
   return `$${value.toFixed(4)}`;
 }
@@ -81,10 +100,12 @@ export function TranslationWorkspace() {
   const [targetLanguage, setTargetLanguage] = useState<"ko" | "ja" | null>(null);
   const [isDemoResult, setIsDemoResult] = useState(false);
   const [costNotice, setCostNotice] = useState("");
+  const [recoveryId, setRecoveryId] = useState("");
 
   const characterCount = countCharacters(sourceText);
   const detection = useMemo(() => detectTranslationDirection(sourceText), [sourceText]);
   const isOverLimit = characterCount > TRANSLATION_CHARACTER_LIMIT;
+  const isBusy = state === "translating" || state === "saving";
 
   function handleSourceChange(value: string) {
     setSourceText(value);
@@ -95,6 +116,7 @@ export function TranslationWorkspace() {
     setTargetLanguage(null);
     setIsDemoResult(false);
     setCostNotice("");
+    setRecoveryId("");
 
     if (countCharacters(value) > TRANSLATION_CHARACTER_LIMIT) {
       setInputError(
@@ -172,6 +194,14 @@ export function TranslationWorkspace() {
         | null;
 
       if (!response.ok || !isTranslationResponse(body)) {
+        if (isSaveFailureResponse(body)) {
+          setRecoveryId(body.recoveryId);
+          setErrorMessage(
+            body.error?.message ?? "번역은 완료했지만 기록을 저장하지 못했습니다.",
+          );
+          setState("save_error");
+          return;
+        }
         const safeMessage = body && "error" in body ? body.error?.message : undefined;
         throw new Error(safeMessage || "번역을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       }
@@ -187,6 +217,42 @@ export function TranslationWorkspace() {
           : "번역을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
       setState("error");
+    }
+  }
+
+  async function handleRetrySave() {
+    if (!recoveryId) return;
+    setState("saving");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/translate/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recoveryId }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | TranslationResponse
+        | ErrorResponse
+        | null;
+      if (!response.ok || !isTranslationResponse(body)) {
+        if (isSaveFailureResponse(body)) setRecoveryId(body.recoveryId);
+        const safeMessage = body && "error" in body ? body.error?.message : undefined;
+        throw new Error(safeMessage || "번역 기록을 다시 저장하지 못했습니다.");
+      }
+
+      setFinalText(body.translation.finalText);
+      setTargetLanguage(body.translation.targetLanguage);
+      setIsDemoResult(body.translation.demo);
+      setRecoveryId("");
+      setState("success");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error && error.message
+          ? error.message
+          : "번역 기록을 다시 저장하지 못했습니다.",
+      );
+      setState("save_error");
     }
   }
 
@@ -230,7 +296,7 @@ export function TranslationWorkspace() {
             placeholder="번역할 Slack 메시지를 입력하거나 붙여 넣으세요."
             aria-describedby="translation-source-help translation-source-error"
             aria-invalid={Boolean(inputError)}
-            disabled={state === "translating"}
+            disabled={isBusy}
             autoFocus
           />
 
@@ -249,12 +315,22 @@ export function TranslationWorkspace() {
           <button
             className="translate-button"
             type="submit"
-            disabled={state === "translating"}
-            aria-busy={state === "translating"}
+            disabled={isBusy || state === "save_error"}
+            aria-busy={isBusy}
           >
-            {state === "translating" && <span className="button-spinner" aria-hidden="true" />}
-            <span>{state === "translating" ? "번역 중" : state === "error" ? "다시 시도" : "번역하기"}</span>
-            {state !== "translating" && <b aria-hidden="true">→</b>}
+            {isBusy && <span className="button-spinner" aria-hidden="true" />}
+            <span>
+              {state === "translating"
+                ? "번역 중"
+                : state === "saving"
+                  ? "저장 중"
+                  : state === "save_error"
+                    ? "저장 대기"
+                    : state === "error"
+                      ? "다시 시도"
+                      : "번역하기"}
+            </span>
+            {!isBusy && state !== "save_error" && <b aria-hidden="true">→</b>}
           </button>
           <span className="auto-copy">AUTO DIRECTION</span>
         </div>
@@ -279,11 +355,25 @@ export function TranslationWorkspace() {
             <div className="translation-result" data-testid="final-translation">
               <p>{finalText}</p>
             </div>
-          ) : state === "translating" ? (
+          ) : isBusy ? (
             <div className="translation-status">
               <span className="result-spinner" aria-hidden="true" />
-              <strong>번역 중</strong>
-              <small>최종 번역본을 준비하고 있습니다.</small>
+              <strong>{state === "saving" ? "기록 저장 중" : "번역 중"}</strong>
+              <small>
+                {state === "saving"
+                  ? "AI를 다시 호출하지 않고 완료된 번역 기록만 저장합니다."
+                  : "최종 번역본을 준비하고 있습니다."}
+              </small>
+            </div>
+          ) : state === "save_error" ? (
+            <div className="translation-error save-error" role="alert">
+              <span aria-hidden="true">!</span>
+              <h3>번역은 완료했지만 저장하지 못했습니다</h3>
+              <p>{errorMessage}</p>
+              <button className="save-retry-button" type="button" onClick={handleRetrySave}>
+                저장 다시 시도
+              </button>
+              <small>이 버튼은 AI를 다시 호출하지 않고 기록 저장만 다시 시도합니다.</small>
             </div>
           ) : state === "error" ? (
             <div className="translation-error" role="alert">

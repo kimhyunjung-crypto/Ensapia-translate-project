@@ -18,6 +18,7 @@ export type GlossaryTermRecord = GlossaryInput & {
   id: string;
   isActive: boolean;
   usedCount: number;
+  version: number;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -149,6 +150,7 @@ export class GlossaryRepository {
             ENCRYPTION_CONTEXT.glossaryForbidden,
           ),
           isActive: value.isActive,
+          version: { increment: 1 },
         },
       });
       await this.writeChange(transaction, id, "updated", {
@@ -170,7 +172,7 @@ export class GlossaryRepository {
     return this.client.$transaction(async (transaction) => {
       const row = await transaction.glossaryTerm.update({
         where: { id },
-        data: { isActive },
+        data: { isActive, version: { increment: 1 } },
       });
       await this.writeChange(transaction, id, isActive ? "reactivated" : "deactivated", {
         changedFields: [FIELD_LABELS.isActive],
@@ -287,6 +289,7 @@ export class GlossaryRepository {
         : [],
       isActive: row.isActive,
       usedCount: row.usedCount,
+      version: row.version,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
