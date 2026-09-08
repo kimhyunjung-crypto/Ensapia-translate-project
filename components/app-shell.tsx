@@ -31,6 +31,7 @@ export function AppShell({
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">본문으로 바로가기</a>
       <header className="app-navigation">
         <Link className="brand" href="/translate" aria-label="ENSAPIA 번역 홈">
           <Image
@@ -67,7 +68,7 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="app-main">
+      <main className="app-main" id="main-content" tabIndex={-1}>
         <header className="app-topbar">
           <div>
             <span className="workspace-label">ENSAPIA SEOUL</span>

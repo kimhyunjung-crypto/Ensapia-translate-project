@@ -3,20 +3,12 @@ import {
   detectTranslationDirection,
   type TranslationDirection,
 } from "@/lib/language";
+import { QUALITY_EVALUATION_CASES } from "@/modules/quality/cases";
 
 const DEMO_TRANSLATIONS = new Map<string, string>([
-  [
-    "안녕하세요. 회의 일정을 확인 부탁드립니다.",
-    "こんにちは。会議の日程をご確認いただけますでしょうか。",
-  ],
-  [
-    "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.",
-    "石渡さん、Ontos（IAM）の練習用アカウント権限をご確認いただけますでしょうか。",
-  ],
-  [
-    "お世話になっております。資料をご確認ください。",
-    "안녕하세요. 자료를 확인해 주세요.",
-  ],
+  ...QUALITY_EVALUATION_CASES.map(
+    ({ sourceText, expectedText }) => [sourceText, expectedText] as const,
+  ),
 ]);
 
 const FALLBACK_TRANSLATIONS: Record<TranslationDirection, string> = {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CompletionReport } from "@/components/completion-report";
 import { OperationsWorkspace } from "@/components/operations-workspace";
 import { ToneRulesWorkspace } from "@/components/tone-rules-workspace";
 import {
@@ -35,6 +36,8 @@ export default async function SettingsPage() {
       <OperationsWorkspace />
 
       <ToneRulesWorkspace />
+
+      <CompletionReport />
 
       {health ? (
         <div className="system-check-grid">

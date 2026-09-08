@@ -297,7 +297,6 @@ export function TranslationWorkspace() {
             aria-describedby="translation-source-help translation-source-error"
             aria-invalid={Boolean(inputError)}
             disabled={isBusy}
-            autoFocus
           />
 
           <div className="source-feedback">
