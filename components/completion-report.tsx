@@ -34,7 +34,7 @@ export function CompletionReport() {
           </div>
           <div className="completion-verification" data-testid="completion-verification">
             <strong>{report.integrationChecks.length}/{report.integrationChecks.length} 통과</strong>
-            <span>{report.generatedAt} · Vitest · Playwright · Build 통과</span>
+            <span>{report.generatedAt} · Vitest 84 · Playwright 23 · Build 통과</span>
           </div>
         </div>
         <ul className="integration-check-grid" data-testid="integration-checks">

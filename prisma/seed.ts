@@ -286,35 +286,6 @@ export async function seedDatabase(client: PrismaClient, key = decodeEncryptionK
     });
   }
 
-  const openingGreetingRule = await client.toneRule.findUnique({
-    where: { situation: "첫인사" },
-  });
-  if (!openingGreetingRule) {
-    await client.toneRule.create({
-      data: {
-        id: "seed-tone-opening-greeting",
-        situation: "첫인사",
-        recommendedToneEnc: encryptText(
-          "메시지 첫머리의 업무 인사를 방향별 필수 표기로 변환",
-          key,
-          ENCRYPTION_CONTEXT.toneRecommended,
-        ),
-        cushionPhrasesEnc: encryptJson([], key, ENCRYPTION_CONTEXT.toneCushion),
-        forbiddenPhrasesEnc: encryptJson(
-          ["こんにちは", "いつもお世話になっております", "수고하십니다", "수고 많으십니다"],
-          key,
-          ENCRYPTION_CONTEXT.toneForbidden,
-        ),
-        exampleEnc: encryptText(
-          "안녕하세요. → お疲れ様です。 / お疲れ様です。 → 안녕하세요.",
-          key,
-          ENCRYPTION_CONTEXT.toneExample,
-        ),
-        createdAt: seedDate,
-      },
-    });
-  }
-
   for (const prompt of [
     {
       id: "seed-prompt-openai-draft",

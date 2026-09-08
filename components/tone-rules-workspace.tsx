@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toneRuleFormInputSchema, type ToneRuleFormInput } from "@/lib/validation";
-import { isOpeningGreetingSituation } from "@/modules/rules/opening-greeting";
 import { appendPhraseText, normalizePhrases } from "@/modules/tone/phrases";
 
 type ToneRule = ToneRuleFormInput & {
@@ -40,7 +39,7 @@ const EMPTY_FORM: ToneRuleFormInput = {
   isActive: true,
 };
 
-const STANDARD_SITUATIONS = ["첫인사", "인사", "요청", "거절", "사과", "독촉", "확인", "감사"];
+const STANDARD_SITUATIONS = ["인사", "요청", "거절", "사과", "독촉", "확인", "감사"];
 
 const ACTION_LABELS: Record<ToneHistory["action"], string> = {
   created: "새 규칙 등록",
@@ -147,10 +146,7 @@ export function ToneRulesWorkspace() {
       const matchesStatus = status === "all" ||
         (status === "active" ? rule.isActive : !rule.isActive);
       return matchesQuery && matchesStatus;
-    }).sort((left, right) =>
-      Number(isOpeningGreetingSituation(right.situation)) -
-      Number(isOpeningGreetingSituation(left.situation)),
-    );
+    });
   }, [query, rules, status]);
 
   async function reloadRules() {
@@ -391,7 +387,7 @@ export function ToneRulesWorkspace() {
         <div>
           <p className="section-kicker">TONE RULES</p>
           <h3 id="tone-rules-heading">상황별 말투 규칙</h3>
-          <p>‘첫인사’는 최우선 필수 규칙으로, 나머지는 감지된 상황별 말투 규칙으로 모든 AI 단계에 적용됩니다.</p>
+          <p>활성 규칙은 감지된 상황에 맞춰 모든 AI 번역 단계에 동일하게 적용됩니다.</p>
         </div>
         <div className="tone-toolbar-actions">
           <label className="search-field">
@@ -423,21 +419,10 @@ export function ToneRulesWorkspace() {
         <>
           <div className="tone-summary"><span>표시 중 {filteredRules.length}개</span><b>전체 {rules.length}개</b></div>
           <div className="tone-card-grid">
-            {filteredRules.map((rule) => {
-              const hardRule = isOpeningGreetingSituation(rule.situation);
-              return (
-              <article
-                className="tone-card"
-                data-active={rule.isActive}
-                data-hard-rule={hardRule || undefined}
-                data-testid={hardRule ? "tone-hard-rule" : "tone-card"}
-                key={rule.id}
-              >
+            {filteredRules.map((rule) => (
+              <article className="tone-card" data-active={rule.isActive} data-testid="tone-card" key={rule.id}>
                 <div className="tone-card-header">
-                  <div className="tone-card-title">
-                    <span className="tone-situation">{rule.situation}</span>
-                    {hardRule && <span className="hard-rule-badge">필수 규칙 · HARD RULE</span>}
-                  </div>
+                  <span className="tone-situation">{rule.situation}</span>
                   <span className="status-badge" data-active={rule.isActive}>
                     <span />{rule.isActive ? "사용 중" : "사용 중지"}
                   </span>
@@ -447,22 +432,6 @@ export function ToneRulesWorkspace() {
                   <strong>{rule.recommendedTone}</strong>
                 </div>
                 <dl className="tone-details">
-                  {hardRule && (
-                    <>
-                      <div className="hard-rule-detail">
-                        <dt>유형</dt>
-                        <dd><strong>필수 규칙 (Hard Rule)</strong></dd>
-                      </div>
-                      <div className="hard-rule-detail">
-                        <dt>우선순위</dt>
-                        <dd><strong>최우선</strong> · 다른 말투와 AI 문맥 판단보다 먼저 적용</dd>
-                      </div>
-                      <div className="hard-rule-detail">
-                        <dt>강제 표기</dt>
-                        <dd>한→일 「お疲れ様です。」 · 일→한 「안녕하세요.」</dd>
-                      </div>
-                    </>
-                  )}
                   <div>
                     <dt>쿠션어</dt>
                     <dd>{rule.cushionPhrases.length ? rule.cushionPhrases.join(" · ") : "없음"}</dd>
@@ -490,8 +459,7 @@ export function ToneRulesWorkspace() {
                   </div>
                 </div>
               </article>
-              );
-            })}
+            ))}
             {filteredRules.length === 0 && <div className="tone-empty">조건에 맞는 말투 규칙이 없습니다.</div>}
           </div>
         </>

@@ -248,41 +248,4 @@ describe("EPIC 5 dual-AI pipeline", () => {
       }),
     ).rejects.toMatchObject({ code: "WRONG_TARGET_LANGUAGE", status: 422 });
   });
-
-  it("corrects an opening greeting after final synthesis before validation", async () => {
-    const greetingRequests = createFirstPassProviderRequests({
-      sourceText: "안녕하세요. 요청 번호는 2026입니다.",
-      direction: "ko-ja",
-      rules: [
-        {
-          type: "hard",
-          priority: 0,
-          category: "opening_greeting",
-          ruleId: "tone-opening-greeting",
-          version: 1,
-          situation: "첫인사",
-          matchedText: "안녕하세요",
-          requiredText: "お疲れ様です。",
-          requiredPosition: "start",
-        },
-      ],
-    });
-    const openai = new RecordingProvider("openai", {
-      finalText: "こんにちは。依頼番号は2026です。",
-    });
-    const gemini = new RecordingProvider("gemini");
-
-    const result = await executeTranslationPipeline({
-      requests: greetingRequests,
-      configuration,
-      providers: { openai, gemini },
-    });
-
-    expect(result.finalText).toBe("お疲れ様です。依頼番号は2026です。");
-    expect(result.final.data.finalText).toBe(result.finalText);
-    expect(result.quality).toEqual({ passed: true, issues: [] });
-    expect(
-      result.attempts.find((attempt) => attempt.stage === "final")?.outputText,
-    ).toBe(result.finalText);
-  });
 });

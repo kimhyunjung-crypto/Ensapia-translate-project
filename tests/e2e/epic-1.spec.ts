@@ -1,20 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 test("opens the Focus White translation screen and shows safe setup guidance", async ({ page }) => {
-  const readinessResponse = await page.request.get("/api/readiness");
-  const readiness = await readinessResponse.json();
-
   await page.goto("/");
 
   await expect(page).toHaveURL(/\/translate$/);
   await expect(page.getByRole("img", { name: "ENSAPIA" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "비즈니스 메시지 번역" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Slack 메시지를 입력하세요" })).toBeVisible();
-  if (readiness.environment.ready) {
-    await expect(page.getByTestId("setup-notice")).toHaveCount(0);
-  } else {
-    await expect(page.getByTestId("setup-notice")).toContainText("AI 연결 준비가 필요합니다");
-  }
+  await expect(page.getByTestId("setup-notice")).toContainText("AI 연결 준비가 필요합니다");
   await expect(page.getByText("openai-secret-value")).toHaveCount(0);
 
   const primaryAction = page.getByRole("button", { name: "번역하기" });
@@ -61,9 +54,9 @@ test("returns only safe readiness fields", async ({ request }) => {
     ok: true,
     localOnly: true,
     environment: {
-      ready: expect.any(Boolean),
-      missing: expect.any(Array),
-      invalid: expect.any(Array),
+      ready: false,
+      missing: ["OPENAI_API_KEY", "GEMINI_API_KEY"],
+      invalid: [],
       dataMode: "demo",
     },
   });
