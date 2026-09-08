@@ -33,6 +33,10 @@ export const glossaryInputSchema = z.object({
   forbiddenTerms: z.array(z.string().trim().min(1).max(200)).max(30).default([]),
 });
 
+export const glossaryFormInputSchema = glossaryInputSchema.extend({
+  isActive: z.boolean({ error: "사용 상태를 확인해 주세요." }).default(true),
+});
+
 export const personInputSchema = z.object({
   japaneseCanonical: normalizedRequiredText("일본어 통합 표기", 200),
   koreanCanonical: normalizedRequiredText("한국어 통합 표기", 200),
@@ -49,5 +53,6 @@ export const toneRuleInputSchema = z.object({
 
 export type TranslationInput = z.infer<typeof translationInputSchema>;
 export type GlossaryInput = z.infer<typeof glossaryInputSchema>;
+export type GlossaryFormInput = z.infer<typeof glossaryFormInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
 export type ToneRuleInput = z.infer<typeof toneRuleInputSchema>;

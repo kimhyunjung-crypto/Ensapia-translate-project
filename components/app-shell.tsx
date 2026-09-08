@@ -37,7 +37,7 @@ export function AppShell({
             src="/ensapia-logo.png"
             alt="ENSAPIA"
             width={158}
-            height={35}
+            height={28}
             priority
           />
           <span>AI Translation Workbench</span>

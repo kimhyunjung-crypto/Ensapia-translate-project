@@ -3,6 +3,7 @@ export const ENCRYPTION_CONTEXT = {
   glossaryTarget: "glossary_terms.target_text",
   glossaryDescription: "glossary_terms.description",
   glossaryForbidden: "glossary_terms.forbidden_terms",
+  glossaryChange: "operation_logs.glossary_change",
   personJapanese: "people.japanese_canonical",
   personKorean: "people.korean_canonical",
   personAlias: "person_aliases.alias",

@@ -1,16 +1,21 @@
 import type { Metadata } from "next";
-import { EmptyWorkspace } from "@/components/empty-workspace";
+import { GlossaryWorkspace } from "@/components/glossary-workspace";
 
 export const metadata: Metadata = { title: "용어집" };
 
 export default function GlossaryPage() {
   return (
-    <EmptyWorkspace
-      eyebrow="GLOSSARY"
-      title="ENSAPIA 용어집"
-      description="서비스명과 고유 용어의 한국어·일본어 표기를 관리합니다."
-      icon="G"
-      upcoming={["용어 검색과 필터", "용어 등록·수정", "파일로 여러 건 가져오기"]}
-    />
+    <section aria-labelledby="glossary-heading">
+      <div className="page-intro glossary-page-intro">
+        <div>
+          <p className="section-kicker">GLOSSARY</p>
+          <h2 id="glossary-heading">ENSAPIA 회사 용어</h2>
+          <p>고정 표기와 금지 표현을 관리하면 활성 용어만 다음 번역부터 적용됩니다.</p>
+        </div>
+        <span className="privacy-badge">암호화 저장 · 변경 기록</span>
+      </div>
+
+      <GlossaryWorkspace />
+    </section>
   );
 }

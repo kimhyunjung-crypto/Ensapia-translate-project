@@ -133,6 +133,84 @@ describe("EPIC 2 database foundation", () => {
     );
   });
 
+  it("creates, updates, filters, audits, deactivates, and safely deletes glossary terms", async () => {
+    const glossary = new GlossaryRepository(client, encryptionKey);
+    const created = await glossary.create({
+      sourceText: "EpicSixTerm",
+      targetText: "EPIC6用語",
+      direction: "ko-ja",
+      description: "EPIC 6 변경 기록 점검",
+      forbiddenTerms: ["에픽식스"],
+      isActive: true,
+    });
+
+    const updated = await glossary.update(created.id, {
+      sourceText: created.sourceText,
+      targetText: "EPIC6推奨用語",
+      direction: created.direction,
+      description: "수정된 설명",
+      forbiddenTerms: created.forbiddenTerms,
+      isActive: true,
+    });
+    expect(updated.targetText).toBe("EPIC6推奨用語");
+    expect(updated.updatedAt?.getTime()).toBeGreaterThanOrEqual(created.updatedAt?.getTime() ?? 0);
+
+    const history = await glossary.history(created.id);
+    expect(history.map((entry) => entry.action)).toEqual(["updated", "created"]);
+    expect(history[0].changedFields).toEqual(["권장 표기", "설명"]);
+    expect(history[0].before?.targetText).toBe("EPIC6用語");
+    expect(history[0].after?.targetText).toBe("EPIC6推奨用語");
+
+    await glossary.setActive(created.id, false);
+    const inactiveRequests = await prepareFirstPassProviderRequests(
+      "EpicSixTerm 확인을 부탁드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(inactiveRequests.openai.input.rules).not.toContainEqual(
+      expect.objectContaining({ ruleId: created.id }),
+    );
+
+    await glossary.setActive(created.id, true);
+    const activeRequests = await prepareFirstPassProviderRequests(
+      "EpicSixTerm 확인을 부탁드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(activeRequests.openai.input.rules).toContainEqual(
+      expect.objectContaining({ ruleId: created.id, requiredText: "EPIC6推奨用語" }),
+    );
+
+    await client.glossaryTerm.update({ where: { id: created.id }, data: { usedCount: 1 } });
+    await expect(glossary.deleteUnused(created.id)).rejects.toMatchObject({
+      code: "GLOSSARY_TERM_IN_USE",
+    });
+    expect(await glossary.setActive(created.id, false)).toMatchObject({ isActive: false });
+
+    const disposable = await glossary.create({
+      sourceText: "DisposableEpicSix",
+      targetText: "削除可能",
+      direction: "ko-ja",
+      forbiddenTerms: [],
+    });
+    await glossary.deleteUnused(disposable.id);
+    expect(await glossary.findById(disposable.id)).toBeNull();
+  });
+
+  it("rejects duplicate glossary source text in the same direction", async () => {
+    const glossary = new GlossaryRepository(client, encryptionKey);
+    await expect(
+      glossary.create({
+        sourceText: "  ontos  ",
+        targetText: "중복",
+        direction: "ko-ja",
+        forbiddenTerms: [],
+      }),
+    ).rejects.toMatchObject({ code: "DUPLICATE_GLOSSARY_TERM" });
+  });
+
   it("stores five pipeline outputs, structured reviews, timing, usage, and rules encrypted", async () => {
     const sourceText = "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.";
     const beforeCount = await client.translationJob.count();
@@ -198,6 +276,10 @@ describe("EPIC 2 database foundation", () => {
       "DemoFlow",
       "야마다 담당자님",
       "가상 점검 메시지입니다.",
+      "EpicSixTerm",
+      "EPIC6推奨用語",
+      "EPIC 6 변경 기록 점검",
+      "DisposableEpicSix",
     ]) {
       expect(rawDatabase).not.toContain(plaintext);
     }
