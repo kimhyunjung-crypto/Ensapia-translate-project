@@ -211,6 +211,78 @@ describe("EPIC 2 database foundation", () => {
     ).rejects.toMatchObject({ code: "DUPLICATE_GLOSSARY_TERM" });
   });
 
+  it("creates, edits, deactivates, and safely deletes bidirectional person rules", async () => {
+    const people = new PeopleRepository(client, encryptionKey);
+    const created = await people.create({
+      japaneseCanonical: "佐藤さん",
+      koreanCanonical: "사토님",
+      aliases: ["사토 담당자님", " 사토 담당자님 ", "사토상"],
+      isActive: true,
+    });
+    expect(created.aliases).toEqual(["사토 담당자님", "사토상"]);
+
+    const updated = await people.update(created.id, {
+      japaneseCanonical: "佐藤部長",
+      koreanCanonical: "사토 부장님",
+      aliases: ["사토 부장님", "사토부장"],
+      isActive: true,
+    });
+    expect(updated).toMatchObject({
+      japaneseCanonical: "佐藤部長",
+      koreanCanonical: "사토 부장님",
+      aliases: ["사토 부장님", "사토부장"],
+    });
+
+    const koreanToJapanese = await prepareFirstPassProviderRequests(
+      "사토부장께 확인을 부탁드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(koreanToJapanese.openai.input.rules).toContainEqual(
+      expect.objectContaining({ ruleId: created.id, requiredText: "佐藤部長" }),
+    );
+    const japaneseToKorean = await prepareFirstPassProviderRequests(
+      "佐藤部長、ご確認をお願いします。",
+      "ja-ko",
+      client,
+      encryptionKey,
+    );
+    expect(japaneseToKorean.openai.input.rules).toContainEqual(
+      expect.objectContaining({ ruleId: created.id, requiredText: "사토 부장님" }),
+    );
+
+    await people.setActive(created.id, false);
+    const inactive = await prepareFirstPassProviderRequests(
+      "사토부장께 확인을 부탁드립니다.",
+      "ko-ja",
+      client,
+      encryptionKey,
+    );
+    expect(inactive.openai.input.rules).not.toContainEqual(
+      expect.objectContaining({ ruleId: created.id }),
+    );
+
+    await expect(
+      people.create({
+        japaneseCanonical: "중복 일본어",
+        koreanCanonical: "중복 한국어",
+        aliases: ["  사토부장  "],
+      }),
+    ).rejects.toMatchObject({ code: "DUPLICATE_PERSON_ALIAS" });
+
+    await client.person.update({ where: { id: created.id }, data: { usedCount: 1 } });
+    await expect(people.deleteUnused(created.id)).rejects.toMatchObject({ code: "PERSON_RULE_IN_USE" });
+
+    const disposable = await people.create({
+      japaneseCanonical: "削除可能さん",
+      koreanCanonical: "삭제 가능님",
+      aliases: ["삭제 가능한 별칭"],
+    });
+    await people.deleteUnused(disposable.id);
+    expect(await people.findById(disposable.id)).toBeNull();
+  });
+
   it("stores five pipeline outputs, structured reviews, timing, usage, and rules encrypted", async () => {
     const sourceText = "이시와타리 대표님, Ontos 연습 계정 권한 확인을 부탁드립니다.";
     const beforeCount = await client.translationJob.count();
@@ -280,6 +352,11 @@ describe("EPIC 2 database foundation", () => {
       "EPIC6推奨用語",
       "EPIC 6 변경 기록 점검",
       "DisposableEpicSix",
+      "佐藤部長",
+      "사토 부장님",
+      "사토부장",
+      "削除可能さん",
+      "삭제 가능한 별칭",
     ]) {
       expect(rawDatabase).not.toContain(plaintext);
     }

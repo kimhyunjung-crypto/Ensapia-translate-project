@@ -43,6 +43,10 @@ export const personInputSchema = z.object({
   aliases: z.array(normalizedRequiredText("인식 표현", 200)).min(1).max(30),
 });
 
+export const personFormInputSchema = personInputSchema.extend({
+  isActive: z.boolean({ error: "사용 상태를 확인해 주세요." }).default(true),
+});
+
 export const toneRuleInputSchema = z.object({
   situation: normalizedRequiredText("상황", 100),
   recommendedTone: normalizedRequiredText("권장 어조", 1_000),
@@ -55,4 +59,5 @@ export type TranslationInput = z.infer<typeof translationInputSchema>;
 export type GlossaryInput = z.infer<typeof glossaryInputSchema>;
 export type GlossaryFormInput = z.infer<typeof glossaryFormInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
+export type PersonFormInput = z.infer<typeof personFormInputSchema>;
 export type ToneRuleInput = z.infer<typeof toneRuleInputSchema>;
