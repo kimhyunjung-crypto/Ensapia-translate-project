@@ -45,7 +45,7 @@ async function incrementRuleUsage(
       where: { id: rule.ruleId },
       data: { usedCount: { increment: 1 } },
     });
-  } else {
+  } else if (rule.type === "tone" || rule.type === "hard") {
     await transaction.toneRule.update({
       where: { id: rule.ruleId },
       data: { usedCount: { increment: 1 } },

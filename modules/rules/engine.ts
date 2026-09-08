@@ -1,7 +1,23 @@
 import type { TranslationDirection } from "@/lib/language";
 import type { GlossaryTermRecord } from "@/modules/glossary/repository";
 import type { PersonRecord } from "@/modules/people/repository";
+import {
+  detectOpeningGreeting,
+  isOpeningGreetingSituation,
+} from "@/modules/rules/opening-greeting";
 import type { ToneRuleRecord } from "@/modules/tone/repository";
+
+export type OpeningGreetingHardRule = {
+  type: "hard";
+  priority: 0;
+  category: "opening_greeting";
+  ruleId: string;
+  version: number;
+  situation: string;
+  matchedText: string;
+  requiredText: "お疲れ様です。" | "안녕하세요.";
+  requiredPosition: "start";
+};
 
 export type PersonAppliedRule = {
   type: "person";
@@ -33,7 +49,11 @@ export type ToneAppliedRule = {
   forbiddenPhrases: string[];
 };
 
-export type AppliedRule = PersonAppliedRule | GlossaryAppliedRule | ToneAppliedRule;
+export type AppliedRule =
+  | OpeningGreetingHardRule
+  | PersonAppliedRule
+  | GlossaryAppliedRule
+  | ToneAppliedRule;
 
 export type TranslationCondition = {
   sourceText: string;
@@ -213,7 +233,9 @@ function selectGlossaryRules(
 }
 
 function selectToneRule(sourceText: string, tones: ToneRuleRecord[]): ToneAppliedRule | null {
-  const activeTones = tones.filter((tone) => tone.isActive);
+  const activeTones = tones.filter(
+    (tone) => tone.isActive && !isOpeningGreetingSituation(tone.situation),
+  );
   const normalizedSource = sourceText.toLocaleLowerCase();
   const detectedSituation = SITUATION_PATTERNS.find(({ situation, patterns }) => {
     const hasRule = activeTones.some((tone) => tone.situation === situation);
@@ -240,11 +262,42 @@ function selectToneRule(sourceText: string, tones: ToneRuleRecord[]): ToneApplie
   };
 }
 
+function selectOpeningGreetingHardRule(
+  sourceText: string,
+  direction: TranslationDirection,
+  tones: ToneRuleRecord[],
+): OpeningGreetingHardRule | null {
+  const match = detectOpeningGreeting(sourceText, direction);
+  if (!match) return null;
+
+  const rule = tones.find(
+    (tone) => tone.isActive && isOpeningGreetingSituation(tone.situation),
+  );
+  if (!rule) return null;
+
+  return {
+    type: "hard",
+    priority: 0,
+    category: "opening_greeting",
+    ruleId: rule.id,
+    version: rule.version,
+    situation: rule.situation,
+    matchedText: match.matchedText,
+    requiredText: match.requiredText,
+    requiredPosition: "start",
+  };
+}
+
 export function buildTranslationCondition(
   sourceText: string,
   direction: TranslationDirection,
   sources: RuleSources,
 ): TranslationCondition {
+  const openingGreeting = selectOpeningGreetingHardRule(
+    sourceText,
+    direction,
+    sources.tones,
+  );
   const people = selectPersonRules(sourceText, direction, sources.people);
   const glossary = selectGlossaryRules(
     sourceText,
@@ -257,6 +310,11 @@ export function buildTranslationCondition(
   return {
     sourceText,
     direction,
-    rules: [...people.rules, ...glossary, ...(tone ? [tone] : [])],
+    rules: [
+      ...(openingGreeting ? [openingGreeting] : []),
+      ...people.rules,
+      ...glossary,
+      ...(tone ? [tone] : []),
+    ],
   };
 }

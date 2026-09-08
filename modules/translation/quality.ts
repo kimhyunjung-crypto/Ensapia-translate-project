@@ -2,6 +2,7 @@ import { AppError } from "@/lib/errors";
 import type { FirstPassProviderInput } from "@/modules/translation/provider-inputs";
 
 export type QualityIssueCode =
+  | "HARD_RULE_VIOLATION"
   | "WRONG_TARGET_LANGUAGE"
   | "NUMBER_MISSING"
   | "REQUIRED_TERM_MISSING"
@@ -57,6 +58,19 @@ export function checkTranslationQuality(
 ): QualityCheck {
   const issues: QualityIssue[] = [];
 
+  const openingGreetingRule = condition.rules.find(
+    (rule) => rule.type === "hard",
+  );
+  if (
+    openingGreetingRule &&
+    !finalText.trimStart().startsWith(openingGreetingRule.requiredText)
+  ) {
+    issues.push({
+      code: "HARD_RULE_VIOLATION",
+      message: `최종 번역이 첫인사 필수 표기 ‘${openingGreetingRule.requiredText}’로 시작하지 않습니다.`,
+    });
+  }
+
   if (hasWrongTargetLanguage(condition.direction, finalText)) {
     issues.push({
       code: "WRONG_TARGET_LANGUAGE",
@@ -71,7 +85,9 @@ export function checkTranslationQuality(
     });
   }
 
-  const fixedRules = condition.rules.filter((rule) => rule.type !== "tone");
+  const fixedRules = condition.rules.filter(
+    (rule) => rule.type === "person" || rule.type === "glossary",
+  );
   if (fixedRules.some((rule) => !finalText.includes(rule.requiredText))) {
     issues.push({
       code: "REQUIRED_TERM_MISSING",

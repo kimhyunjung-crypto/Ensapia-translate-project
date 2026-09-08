@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const koreanSource = "안녕하세요. 회의 일정을 확인 부탁드립니다.";
-const japaneseResult = "こんにちは。会議の日程をご確認いただけますでしょうか。";
+const japaneseResult = "お疲れ様です。会議の日程をご確認いただけますでしょうか。";
 
 test("accepts multiline Korean input, shows progress, one final result, and copies it", async ({
   context,

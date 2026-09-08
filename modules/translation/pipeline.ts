@@ -7,6 +7,7 @@ import type {
   ProviderCallResult,
   TranslationProvider,
 } from "@/modules/ai/types";
+import { enforceOpeningGreeting } from "@/modules/rules/opening-greeting";
 import { assertTranslationQuality, type QualityCheck } from "@/modules/translation/quality";
 import {
   buildDraftPrompt,
@@ -230,13 +231,37 @@ export async function executeTranslationPipeline(input: {
       (data) => data.finalText,
       attempts,
     );
-    const quality = assertTranslationQuality(requests.openai.input, final.data.finalText);
+    const hasOpeningGreetingHardRule = requests.openai.input.rules.some(
+      (rule) => rule.type === "hard" && rule.category === "opening_greeting",
+    );
+    const enforcedGreeting = hasOpeningGreetingHardRule
+      ? enforceOpeningGreeting(
+          requests.openai.input.sourceText,
+          requests.openai.input.direction,
+          final.data.finalText,
+        )
+      : { finalText: final.data.finalText, corrected: false };
+    const enforcedFinal = enforcedGreeting.corrected
+      ? { ...final, data: { ...final.data, finalText: enforcedGreeting.finalText } }
+      : final;
+    if (enforcedGreeting.corrected) {
+      const finalAttempt = attempts.findLast(
+        (attempt) => attempt.provider === "openai" &&
+          attempt.stage === "final" &&
+          attempt.status === "completed",
+      );
+      if (finalAttempt) finalAttempt.outputText = enforcedGreeting.finalText;
+    }
+    const quality = assertTranslationQuality(
+      requests.openai.input,
+      enforcedGreeting.finalText,
+    );
 
     return {
-      finalText: final.data.finalText,
+      finalText: enforcedGreeting.finalText,
       drafts: { openai: openaiDraft, gemini: geminiDraft },
       reviews: { openai: openaiReview, gemini: geminiReview },
-      final,
+      final: enforcedFinal,
       quality,
       attempts,
     };

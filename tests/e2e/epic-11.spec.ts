@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const sourceText = "안녕하세요. 회의 일정을 확인 부탁드립니다.";
-const expectedText = "こんにちは。会議の日程をご確認いただけますでしょうか。";
+const expectedText = "お疲れ様です。会議の日程をご確認いただけますでしょうか。";
 
 test("shows the integrated flow result, 50 quality cases, and PRD checklist", async ({ page }) => {
   await page.goto("/translate");

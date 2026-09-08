@@ -11,6 +11,7 @@ import type {
   ReviewProviderRequest,
   TranslationProvider,
 } from "@/modules/ai/types";
+import { enforceOpeningGreeting } from "@/modules/rules/opening-greeting";
 import { createDemoTranslation } from "@/modules/translation/demo-service";
 
 const DEMO_DELAY_MS = 8;
@@ -31,7 +32,10 @@ function withRequiredContent(request: DraftProviderRequest, translatedText: stri
   const additions: string[] = [];
 
   for (const rule of request.condition.rules) {
-    if (rule.type !== "tone" && !translatedText.includes(rule.requiredText)) {
+    if (
+      (rule.type === "person" || rule.type === "glossary") &&
+      !translatedText.includes(rule.requiredText)
+    ) {
       additions.push(rule.requiredText);
     }
   }
@@ -67,7 +71,17 @@ export class DemoTranslationProvider implements TranslationProvider {
     const startedAt = Date.now();
     await wait(DEMO_DELAY_MS);
     const demo = createDemoTranslation(request.condition.sourceText);
-    const translatedText = withRequiredContent(request, demo.finalText);
+    const hasOpeningGreetingHardRule = request.condition.rules.some(
+      (rule) => rule.type === "hard" && rule.category === "opening_greeting",
+    );
+    const greeting = hasOpeningGreetingHardRule
+      ? enforceOpeningGreeting(
+          request.condition.sourceText,
+          request.condition.direction,
+          demo.finalText,
+        )
+      : { finalText: demo.finalText };
+    const translatedText = withRequiredContent(request, greeting.finalText);
 
     return {
       data: { translatedText },

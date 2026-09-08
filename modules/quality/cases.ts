@@ -13,7 +13,7 @@ export const QUALITY_EVALUATION_CASES: readonly QualityEvaluationCase[] = [
     id: "KO-JA-01",
     direction: "ko-ja",
     sourceText: "안녕하세요. 회의 일정을 확인 부탁드립니다.",
-    expectedText: "こんにちは。会議の日程をご確認いただけますでしょうか。",
+    expectedText: "お疲れ様です。会議の日程をご確認いただけますでしょうか。",
     requiredTerms: [],
   },
   {
